@@ -43,6 +43,8 @@ Item {
   }
   readonly property string helperBin: pluginDir + "/bin/hints-ctl"
   readonly property string helperSh: pluginDir + "/compat/hints-ctl.sh"
+  readonly property string bindLuaPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/io.github.chris.window-hints.binds.lua"
+  property var pendingBindPlan: null
 
   property bool helperIsBinary: false
   property bool helperReady: false
@@ -751,18 +753,8 @@ Item {
         root.applyBindPlan(plan)
         return
       }
-      root.enqueueWork(["python3", root.pluginDir + "/compat/install-binds.py", root.pluginId, lua], function (out, instOk) {
-        if (!instOk) {
-          root.bindOfferNote = "could not write ~/.config/hypr/bindings.lua"
-          root.bindOfferNeeded = true
-          root.bindOfferCanInstall = true
-          Session.setBindOffer(true, true, root.bindOfferNote)
-          root.publish()
-          return
-        }
-        root.notifyNewBinds(plan)
-        Qt.callLater(root.scanBinds)
-      })
+      root.pendingBindPlan = plan
+      bindLuaFile.setText(lua)
     })
     return "ok"
   }
@@ -824,6 +816,30 @@ Item {
         root.activateSubmap()
       root.publish()
     })
+  }
+
+  FileView {
+    id: bindLuaFile
+    path: root.bindLuaPath
+    printErrors: false
+    onSaved: {
+      var plan = root.pendingBindPlan
+      if (!plan)
+        return
+      root.pendingBindPlan = null
+      root.enqueueWork(["python3", root.pluginDir + "/compat/install-binds.py", root.pluginId, "--file", root.bindLuaPath], function (out, instOk) {
+        if (!instOk) {
+          root.bindOfferNote = "could not write ~/.config/hypr/bindings.lua"
+          root.bindOfferNeeded = true
+          root.bindOfferCanInstall = true
+          Session.setBindOffer(true, true, root.bindOfferNote)
+          root.publish()
+          return
+        }
+        root.notifyNewBinds(plan)
+        Qt.callLater(root.scanBinds)
+      })
+    }
   }
 
   Process {

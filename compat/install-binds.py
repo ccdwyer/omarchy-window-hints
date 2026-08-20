@@ -7,10 +7,17 @@ import sys
 
 def main() -> int:
     if len(sys.argv) < 3:
-        print("usage: install-binds.py PLUGIN_ID LUA_BLOCK", file=sys.stderr)
+        print("usage: install-binds.py PLUGIN_ID LUA_BLOCK|--file PATH", file=sys.stderr)
         return 2
     plugin_id = sys.argv[1]
-    block = sys.argv[2]
+    if sys.argv[2] == "--file":
+        if len(sys.argv) < 4:
+            print("usage: install-binds.py PLUGIN_ID --file PATH", file=sys.stderr)
+            return 2
+        with open(sys.argv[3], encoding="utf-8") as handle:
+            block = handle.read()
+    else:
+        block = sys.argv[2]
     if not block.endswith("\n"):
         block += "\n"
     config_home = os.environ.get("XDG_CONFIG_HOME") or os.path.join(
