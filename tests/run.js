@@ -48,6 +48,7 @@ const Input = loadEngine("Input.js")
 const Actions = loadEngine("Actions.js")
 const Swap = loadEngine("Swap.js")
 const Session = loadEngine("Session.js")
+const Binds = loadEngine("Binds.js")
 
 let passed = 0
 let failed = 0
@@ -530,6 +531,89 @@ test("matchPrefix: typed letters split exact/partial/rest", () => {
   assert.strictEqual(m.partial.length, 2)
   assert.strictEqual(m.exact.length, 0)
   assert.strictEqual(m.rest.length, 2)
+})
+
+test("binds: empty live list offers SUPER+H and never Super+F", () => {
+  const p = Binds.plan([])
+  assert.strictEqual(p.needed, true)
+  assert.strictEqual(p.canInstall, true)
+  assert.strictEqual(p.toAdd.length, 1)
+  assert.strictEqual(p.chosen, "SUPER + H")
+  assert.ok(p.note.indexOf("SUPER + H") >= 0)
+  const lua = Binds.luaBlock(p.toAdd)
+  assert.ok(lua.indexOf('hl.bind("SUPER + H"') >= 0)
+  assert.ok(lua.indexOf('hl.bind("SUPER + F"') < 0)
+  assert.ok(lua.indexOf("hl.unbind") < 0)
+})
+
+test("binds: Super+F fullscreen is skipped, Super+H is used", () => {
+  const live = jsonFix("binds-super-f.json")
+  const p = Binds.plan(live)
+  assert.strictEqual(p.needed, true)
+  assert.strictEqual(p.chosen, "SUPER + H")
+  assert.strictEqual(Binds.isForbiddenSuperF("SUPER + F"), true)
+  assert.strictEqual(Binds.isForbiddenSuperF("SUPER+F"), true)
+  assert.strictEqual(Binds.isForbiddenSuperF("SUPER + ALT + F"), false)
+  assert.strictEqual(Binds.luaBlock("SUPER + F"), "")
+  assert.strictEqual(Binds.luaBlock("SUPER+F"), "")
+})
+
+test("binds: occupied Super+H uses semicolon; then Super+Alt+F", () => {
+  const hTaken = [{ modmask: 64, key: "H", dispatcher: "exec", arg: "other", description: "Voxtype" }]
+  const p = Binds.plan(hTaken)
+  assert.strictEqual(p.chosen, "SUPER + semicolon")
+  assert.ok(p.note.indexOf("SUPER + semicolon") >= 0)
+  assert.ok(p.note.indexOf("SUPER + H") >= 0)
+  const both = hTaken.concat([{ modmask: 64, key: "semicolon", dispatcher: "exec", arg: "menu" }])
+  const p2 = Binds.plan(both)
+  assert.strictEqual(p2.chosen, "SUPER + ALT + F")
+  const lua = Binds.luaBlock(p2.toAdd)
+  assert.ok(lua.indexOf('hl.bind("SUPER + ALT + F"') >= 0)
+  assert.ok(lua.indexOf('hl.bind("SUPER + F"') < 0)
+})
+
+test("binds: every alternate taken lists conflicts and does not install", () => {
+  const live = [
+    { modmask: 64, key: "H", dispatcher: "exec", arg: "a", description: "Voxtype" },
+    { modmask: 64, key: "semicolon", dispatcher: "exec", arg: "b", description: "menu" },
+    { modmask: 72, key: "F", dispatcher: "fullscreen", arg: "0", description: "Alt fullscreen" }
+  ]
+  const p = Binds.plan(live)
+  assert.strictEqual(p.needed, true)
+  assert.strictEqual(p.canInstall, false)
+  assert.strictEqual(p.toAdd.length, 0)
+  assert.ok(p.note.indexOf("SUPER + H") >= 0)
+  assert.ok(p.note.indexOf("SUPER + semicolon") >= 0)
+  assert.ok(p.note.indexOf("SUPER + ALT + F") >= 0)
+  assert.strictEqual(Binds.luaBlock(p.toAdd), "")
+})
+
+test("binds: plugin id, description, or hints submap hides the offer", () => {
+  const byArg = [{ modmask: 64, key: "H", dispatcher: "exec", arg: "omarchy-shell shell toggle io.github.chris.window-hints '{}'" }]
+  assert.strictEqual(Binds.plan(byArg).needed, false)
+  const byDesc = [{ modmask: 64, key: "H", dispatcher: "__lua", arg: "15", description: "Window hints" }]
+  assert.strictEqual(Binds.plan(byDesc).needed, false)
+  const bySubmap = [{ modmask: 0, key: "a", dispatcher: "exec", arg: "omarchy-shell window-hints key a", submap: "hints" }]
+  assert.strictEqual(Binds.plan(bySubmap).needed, false)
+  const byDispatch = [{ modmask: 64, key: "H", dispatcher: "submap", arg: "hints" }]
+  assert.strictEqual(Binds.plan(byDispatch).needed, false)
+})
+
+test("binds: lua block is the hints submap, chords go to window-hints, no unbind", () => {
+  const lua = Binds.luaBlock("SUPER + H")
+  assert.ok(lua.indexOf('hl.define_submap("hints"') >= 0)
+  assert.ok(lua.indexOf("omarchy-shell shell toggle io.github.chris.window-hints '{}'") >= 0)
+  assert.ok(lua.indexOf("omarchy-shell window-hints key a") >= 0)
+  assert.ok(lua.indexOf("omarchy-shell window-hints key A") >= 0)
+  assert.ok(lua.indexOf("omarchy-shell window-hints key x") >= 0)
+  assert.ok(lua.indexOf("omarchy-shell window-hints key 3") >= 0)
+  assert.ok(lua.indexOf("omarchy-shell window-hints key escape") >= 0)
+  assert.ok(lua.indexOf("catchall") >= 0)
+  assert.ok(lua.indexOf('hl.dsp.submap("reset")') >= 0)
+  assert.ok(lua.indexOf("shell call") < 0)
+  assert.ok(lua.indexOf("hl.unbind") < 0)
+  assert.ok(lua.indexOf('hl.unbind("SUPER + F"') < 0)
+  assert.ok(lua.indexOf('hl.bind("SUPER + F"') < 0)
 })
 
 if (failed) {

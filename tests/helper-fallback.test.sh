@@ -48,6 +48,10 @@ grep -q 'commitDirect' "$OV" && { echo "Overlay must not commit actions locally"
 grep -q 'js/Input.js' "$OV" && { echo "Overlay must not import Input.js"; exit 1; }
 grep -q 'sendToService("key"' "$OV" || { echo "Overlay exclusive keys must go through sendToService"; exit 1; }
 grep -q 'window-hints' "$OV" || { echo "Overlay must forward to window-hints IPC"; exit 1; }
+grep -q 'Add keybindings' "$OV" || { echo "Overlay missing Add keybindings"; exit 1; }
+grep -q 'hl.unbind(' "$ROOT/js/Binds.js" && { echo "Binds.js must never call hl.unbind"; exit 1; }
+grep -q 'hl.unbind(' "$SVC" && { echo "Service must never call hl.unbind"; exit 1; }
+test -f "$ROOT/compat/install-binds.py" || { echo "missing compat/install-binds.py"; exit 1; }
 grep -q 'target/' "$ROOT/.gitignore" || { echo ".gitignore must exclude cargo target/"; exit 1; }
 grep -q 'export-ignore' "$ROOT/.gitattributes" || { echo ".gitattributes must export-ignore target/"; exit 1; }
 

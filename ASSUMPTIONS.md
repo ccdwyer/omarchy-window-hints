@@ -15,7 +15,8 @@ Conservative choices where the Omarchy / Quickshell / Hyprland API was not 100% 
 ## Settings
 
 - Settings arrive **inline on the shell.json entry**. Merge order (see `Config.resolveSettings`): compiled defaults, then Item properties that differ from those defaults (host-bound), then the injected `settings` object (authoritative), then a summon payload. Root QML defaults never overwrite `settings`.
-- **`suggestedBind`** is parsed (`SUPER+F` → mods `SUPER`, key `F`) and passed to `binds-check`. Collision detection uses that pair. Generated Lua / keyword batches (`hints-ctl submap install|script <bind>`) emit that bind, not a hardcoded Super+F. The shipped `bindings.lua` paste is the default `SUPER+F`.
+- **`suggestedBind`** is parsed (`SUPER+F` → mods `SUPER`, key `F`) and passed to `binds-check`. Collision detection uses that pair. Generated Lua / keyword batches (`hints-ctl submap install|script <bind>`) emit that bind, not a hardcoded Super+F. The shipped `bindings.lua` paste and the opt-in installer default to **Super+H**. Super+F is Omarchy fullscreen and is never written or unbound.
+- **Opt-in `Add keybindings`** appends a marked `hl.bind` + `hl.define_submap("hints")` block to `~/.config/hypr/bindings.lua` after `hyprctl -j binds`. Summon candidates are Super+H, Super+semicolon, Super+Alt+F. Occupied combos are skipped; if all three are taken the overlay lists conflicts and writes nothing. Hide the button when live binds already include this plugin (`io.github.chris.window-hints` in `arg`, description matching "Window hints", or a submap named `hints`). Never `hl.unbind`.
 - **Alphabet is fixed** to `asdfghjkl` in v1.0. It is not an inline setting. Reserved verb keys (`x`, `1`–`9`) are not in the chord set. The submap is generated once from that alphabet; `installedAlphabet` is recorded only after a successful install.
 
 ## Quickshell
@@ -52,4 +53,3 @@ Conservative choices where the Omarchy / Quickshell / Hyprland API was not 100% 
 - Cross-workspace swap.
 - A second Quickshell process.
 - Network, accounts, telemetry.
-- Writing Hyprland config for the user.

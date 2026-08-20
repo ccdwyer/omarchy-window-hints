@@ -11,6 +11,7 @@ import "js/Input.js" as Input
 import "js/Actions.js" as Actions
 import "js/Swap.js" as Swap
 import "js/Session.js" as Session
+import "js/Binds.js" as Binds
 
 Item {
   id: root
@@ -59,6 +60,9 @@ Item {
   property bool pendingActivate: false
   property string installedAlphabet: ""
   property string bindingsWarning: ""
+  property bool bindOfferNeeded: false
+  property bool bindOfferCanInstall: false
+  property string bindOfferNote: ""
   property string lastStatus: "starting"
   property string lastError: ""
   property string lastActiveAddress: ""
@@ -274,6 +278,7 @@ Item {
       payload = null
     }
     root.ingestHostSettings(payload)
+    root.scanBinds()
     if (!root.submapInstalled && !root.installInFlight)
       root.installSubmap()
     if (root.hinting) {
@@ -531,6 +536,7 @@ Item {
     workTimeout.stop()
     socketFallbackTimer.stop()
     reconnectTimer.stop()
+    bindScanTimer.stop()
     root.workQueue = []
     root.workCurrent = null
     try { workProc.running = false } catch (e2) {}
@@ -688,9 +694,67 @@ Item {
       submapInstalled: root.submapInstalled,
       bindingsWarning: root.bindingsWarning,
       bindCollision: root.bindCollision,
+      bindOfferNeeded: root.bindOfferNeeded,
+      bindOfferNote: root.bindOfferNote,
       status: root.lastStatus,
       error: root.lastError
     })
+  }
+
+  function applyBindPlan(plan) {
+    var p = plan || Binds.offer
+    root.bindOfferNeeded = !!p.needed
+    root.bindOfferCanInstall = !!p.canInstall
+    root.bindOfferNote = String(p.note || "")
+    Binds.setOffer(p)
+    Session.setBindOffer(root.bindOfferNeeded, root.bindOfferCanInstall, root.bindOfferNote)
+    root.publish()
+  }
+
+  function scanBinds() {
+    if (root.tearingDown)
+      return
+    root.enqueueWork(["hyprctl", "-j", "binds"], function (text, ok) {
+      if (!ok)
+        return
+      root.applyBindPlan(Binds.applyScan(text))
+    })
+  }
+
+  function installBinds(arg) {
+    root.enqueueWork(["hyprctl", "-j", "binds"], function (text, ok) {
+      if (!ok) {
+        root.bindOfferNote = "could not read keybinds"
+        root.bindOfferNeeded = true
+        root.bindOfferCanInstall = false
+        Session.setBindOffer(true, false, root.bindOfferNote)
+        root.publish()
+        return
+      }
+      var plan = Binds.applyScan(text)
+      if (!plan.toAdd || !plan.toAdd.length) {
+        root.applyBindPlan(plan)
+        return
+      }
+      var lua = Binds.luaBlock(plan.toAdd)
+      if (!lua.length || lua.indexOf("hl.unbind") >= 0 || Binds.isForbiddenSuperF(plan.chosen || plan.toAdd[0].keys)) {
+        root.applyBindPlan(plan)
+        return
+      }
+      root.enqueueWork(["python3", root.pluginDir + "/compat/install-binds.py", root.pluginId, lua], function (out, instOk) {
+        if (!instOk) {
+          root.bindOfferNote = "could not write ~/.config/hypr/bindings.lua"
+          root.bindOfferNeeded = true
+          root.bindOfferCanInstall = true
+          Session.setBindOffer(true, true, root.bindOfferNote)
+          root.publish()
+          return
+        }
+        root.toast("added " + (plan.chosen || plan.toAdd[0].keys))
+        Qt.callLater(root.scanBinds)
+      })
+    })
+    return "ok"
   }
 
   function probeSwap() {
@@ -789,6 +853,7 @@ Item {
         root.helperIsBinary = out === "binary"
         root.helperReady = true
         root.requestSnapshot("boot")
+        root.scanBinds()
         root.checkBinds(function () {
           root.installSubmap()
         })
@@ -955,6 +1020,18 @@ Item {
     function status(arg: string): string { return root.status(arg) }
     function begin(payload: string): string { return root.begin(payload) }
     function markFirstRun(): string { return root.markFirstRun() }
+    function installBinds(arg: string): string { return root.installBinds(arg) }
+  }
+
+  Timer {
+    id: bindScanTimer
+    interval: 3000
+    repeat: true
+    running: true
+    onTriggered: {
+      if (!root.tearingDown)
+        root.scanBinds()
+    }
   }
 
   Component.onCompleted: {

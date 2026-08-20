@@ -23,6 +23,9 @@ var error = ""
 var submapActive = false
 var submapInstalled = false
 var bindingsWarning = ""
+var bindOfferNeeded = false
+var bindOfferCanInstall = false
+var bindOfferNote = ""
 var inputPath = "submap"
 var hinting = false
 var inputState = {
@@ -59,6 +62,9 @@ function snapshot() {
         submapActive: submapActive,
         submapInstalled: submapInstalled,
         bindingsWarning: bindingsWarning,
+        bindOfferNeeded: bindOfferNeeded,
+        bindOfferCanInstall: bindOfferCanInstall,
+        bindOfferNote: bindOfferNote,
         inputPath: inputPath,
         hinting: hinting
     }
@@ -140,6 +146,13 @@ function setSubmapInstalled(value) {
 
 function setBindingsWarning(value) {
     bindingsWarning = String(value || "")
+    bump()
+}
+
+function setBindOffer(needed, canInstall, note) {
+    bindOfferNeeded = !!needed
+    bindOfferCanInstall = !!canInstall
+    bindOfferNote = String(note || "")
     bump()
 }
 
