@@ -9,6 +9,7 @@
 
 var PLUGIN_ID = "io.github.chris.window-hints"
 var DESC = "Window hints"
+var NOTIFY_DESC = "Window Hints (then type a letter)"
 var ALPHABET = "asdfghjkl"
 var SUPER = 64
 var SHIFT = 1
@@ -29,6 +30,15 @@ var offer = {
     toAdd: [],
     skipped: [],
     chosen: ""
+}
+
+var autoClaimed = false
+
+function claimAuto() {
+    if (autoClaimed)
+        return false
+    autoClaimed = true
+    return true
 }
 
 function setOffer(next) {
@@ -153,7 +163,8 @@ function plan(binds) {
                 keys: c.keys,
                 modmask: c.modmask,
                 key: c.key,
-                chosen: c.keys
+                chosen: c.keys,
+                desc: NOTIFY_DESC
             }
             return {
                 needed: true,
@@ -269,4 +280,21 @@ function applyScan(raw) {
     var p = plan(parseBinds(raw))
     setOffer(p)
     return p
+}
+
+function notifyBody(items, skipped) {
+    var lines = []
+    var list = items || []
+    for (var i = 0; i < list.length; i++) {
+        var it = list[i]
+        lines.push((it.chosen || it.keys) + " — " + (it.desc || NOTIFY_DESC))
+    }
+    var miss = skipped || []
+    for (var s = 0; s < miss.length; s++)
+        lines.push("skipped " + miss[s].keys + " (" + (miss[s].conflict || "taken") + ")")
+    return lines.join("\n")
+}
+
+function notifyArgv(appName, headline, body) {
+    return ["omarchy", "notification", "send", "--app-name", String(appName || PLUGIN_ID), "-g", "󰌌", String(headline || "Keybindings"), String(body || "")]
 }

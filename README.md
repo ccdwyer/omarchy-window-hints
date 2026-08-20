@@ -18,7 +18,7 @@ Then, on the machine, build the helper (optional — QML talks to `hyprctl` dire
 ~/.config/omarchy/plugins/io.github.chris.window-hints/build.sh
 ```
 
-Paste `bindings.lua` into `~/.config/hypr/bindings.lua`, click **Add keybindings** on first summon, or run `hints-ctl submap install` (tries `hyprctl eval`, then a `hyprctl --batch` keyword fallback). Reload plugins if the shell was already running:
+On first load the plugin auto-installs the `hints` submap and a free summon bind into `~/.config/hypr/bindings.lua`, then pops an Omarchy notification with the key it assigned. You can also paste `bindings.lua` or run `hints-ctl submap install` (tries `hyprctl eval`, then a `hyprctl --batch` keyword fallback). Reload plugins if the shell was already running:
 
 ```sh
 omarchy-shell shell rescanPlugins
@@ -34,9 +34,7 @@ omarchy-shell shell rescanPlugins
 | hint key, then `1`–`9` then chord | Move to workspace N (`movetoworkspacesilent`) |
 | `Esc` | Always dismiss (including while a close is armed); always resets the Hyprland submap |
 
-Suggested summon is **Super+H**. Stock Omarchy binds **Super+F** to Full screen — this plugin never steals it and never `hl.unbind`s it. If Super+H is taken, the overlay offers **Super+;** then **Super+Alt+F**.
-
-If none of those keys are bound yet, the overlay banner offers **Add keybindings**. That appends a marked `hints` submap plus the chosen summon bind to `~/.config/hypr/bindings.lua` (Hyprland reloads on save). Occupied combos are skipped. If every alternate is taken, the overlay lists the conflicts and writes nothing.
+Suggested summon is **Super+H**. Stock Omarchy binds **Super+F** to Full screen — this plugin never steals it and never `hl.unbind`s it. If Super+H is taken, it tries **Super+;** then **Super+Alt+F**. Occupied shortcuts (including stock Omarchy hotkeys) are skipped. If every alternate is taken, nothing is written. It will not notify again once its binds are already live.
 
 ```lua
 -- ~/.config/hypr/bindings.lua  (full copy in bindings.lua)
@@ -80,7 +78,7 @@ Chords use a **fixed** home-row alphabet `asdfghjkl` (v1.0). `x` and `1`–`9` a
 - **Swap is same-workspace only.** Cross-workspace swap is not a swap (it would take two `movetoworkspacesilent` and wreck both layouts). If this Hyprland's `swapwindow` is directional-only, the Shift+chord verb is greyed rather than surprising you.
 - **25 visible windows (or chord capacity, whichever is smaller).** Beyond that, a "+N more" chip; extra windows are not hinted.
 - **Label freeze.** A window that closes mid-hint loses its label; that chord is never reused. New windows opening mid-hint are ignored until the next summon. The first summon waits for a successful `hyprctl` clients+monitors snapshot before freezing; it will not lock in an empty label set from a cold start.
-- **Keybinds are opt-in.** First summon shows the table. **Add keybindings** writes Super+H (or Super+; / Super+Alt+F) plus the `hints` submap; Super+F is never used. Generated `hints-ctl submap install|script` uses the live `suggestedBind`. On Hyprland 0.55, `hyprctl keyword` may refuse to install the submap at runtime — paste `bindings.lua` or use the button. Until that install succeeds, the overlay keeps exclusive keys.
+- **Keybinds auto-assign on first load.** Super+H (or Super+; / Super+Alt+F) plus the `hints` submap are written if a summon combo is free; Super+F is never used. Occupied combos (including stock Omarchy hotkeys) are skipped. Notify only after a successful write. Generated `hints-ctl submap install|script` uses the live `suggestedBind`. On Hyprland 0.55, `hyprctl keyword` may refuse to install the submap at runtime — paste `bindings.lua`. Until that install succeeds, the overlay keeps exclusive keys. Overlay-only input is fine.
 - **Helper binary.** `bin/hints-ctl` is built by `build.sh`. If it is missing, QML uses `compat/hints-ctl.sh` and raw `hyprctl`. Submap *definition* may need the Lua snippet; summon does **not** enter an undefined `hints` submap.
 - **Timeouts.** Every live `hyprctl` from the service is a queued `Process` with an 800 ms timeout and an error toast. The helper’s own `hyprctl` children use the same 800 ms cap (or `timeout 1` in the POSIX fallback). `Hyprland.dispatch` is used only on teardown, where we cannot wait, plus `execDetached hyprctl dispatch 'hl.dsp.submap("reset")'`. The 15 s idle watchdog still dismisses the overlay and resets a live submap. Disable / unload / hot-reload runs `Component.onDestruction` cleanup (stop timers and processes, `submap reset`).
 - **Coordinates.** Mapping is logical-coords only (no `* scale`). Rotated outputs that already report swapped width/height are subtracted; a pre-transform JSON is rotated in `globalToOutput`. If geometry looks unusable, labels fall back to a per-monitor gutter with titles.

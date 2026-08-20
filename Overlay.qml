@@ -384,7 +384,7 @@ Item {
       }
 
       Rectangle {
-        visible: root.bindingsWarning.length > 0 || root.firstRun || root.bindOfferNeeded || root.verb !== "focus" || root.swapGreyed && root.verb === "swap"
+        visible: root.bindingsWarning.length > 0 || root.firstRun || (root.bindOfferNeeded && !root.bindOfferCanInstall) || root.verb !== "focus" || root.swapGreyed && root.verb === "swap"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Style.gapsOut + 8
@@ -438,33 +438,13 @@ Item {
             opacity: 0.86
           }
           Text {
-            visible: root.bindOfferNeeded && root.bindOfferNote.length > 0
+            visible: root.bindOfferNeeded && !root.bindOfferCanInstall && root.bindOfferNote.length > 0
             text: root.bindOfferNote
-            color: root.bindOfferCanInstall ? root.foreground : root.danger
+            color: root.danger
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
             wrapMode: Text.WordWrap
             width: Math.min(panel.width - 48, 520)
-          }
-          Rectangle {
-            visible: root.bindOfferCanInstall
-            width: bindLabel.implicitWidth + 16
-            height: bindLabel.implicitHeight + 10
-            radius: Math.max(4, root.cornerRadius / 2)
-            color: root.accent
-            Text {
-              id: bindLabel
-              anchors.centerIn: parent
-              text: "Add keybindings"
-              color: root.background
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-            }
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.installBinds("")
-            }
           }
         }
       }

@@ -599,6 +599,26 @@ test("binds: plugin id, description, or hints submap hides the offer", () => {
   assert.strictEqual(Binds.plan(byDispatch).needed, false)
 })
 
+test("binds: notify body lists assigned summon", () => {
+  const body = Binds.notifyBody([{ chosen: "SUPER + H", desc: "Window Hints (then type a letter)" }], [])
+  assert.ok(body.indexOf("SUPER + H — Window Hints (then type a letter)") === 0)
+  const argv = Binds.notifyArgv("Window Hints", "Window Hints keybindings", body)
+  assert.strictEqual(argv[0], "omarchy")
+  assert.strictEqual(argv[1], "notification")
+  assert.strictEqual(argv[2], "send")
+  assert.ok(Binds.claimAuto())
+  assert.strictEqual(Binds.claimAuto(), false)
+})
+
+test("binds: service auto-assigns on first scan, overlay has no Add keybindings", () => {
+  const src = fs.readFileSync(path.join(ROOT, "Service.qml"), "utf8")
+  assert.ok(src.indexOf("Binds.claimAuto()") >= 0)
+  assert.ok(src.indexOf("notifyNewBinds") >= 0)
+  assert.ok(src.indexOf("compat/install-binds.py") >= 0)
+  const overlay = fs.readFileSync(path.join(ROOT, "Overlay.qml"), "utf8")
+  assert.ok(overlay.indexOf("Add keybindings") < 0)
+})
+
 test("binds: lua block is the hints submap, chords go to window-hints, no unbind", () => {
   const lua = Binds.luaBlock("SUPER + H")
   assert.ok(lua.indexOf('hl.define_submap("hints"') >= 0)
