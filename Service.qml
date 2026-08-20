@@ -46,14 +46,15 @@ Item {
   property bool helperIsBinary: false
   property bool helperReady: false
   property bool hyprlandEventsLive: false
-  property bool socketWanted: true
-  property int socketBackoffMs: 250
   property bool swapCapable: false
   property bool swapProbed: false
   property bool firstRunShown: false
   property bool bindCollision: false
   property bool hinting: false
   property bool overlayExclusive: false
+  property bool submapInstalled: false
+  property bool submapInstallTried: false
+  property string bindingsWarning: ""
   property string lastStatus: "starting"
   property string lastError: ""
   property string lastActiveAddress: ""
@@ -242,6 +243,8 @@ Item {
     Session.setFirstRun(!root.firstRunShown, root.bindCollision, root.suggestedBind, Config.alternateBinds)
     Session.setSwap(root.swapCapable)
     Session.setError("")
+    Session.setBindingsWarning(root.bindingsWarning)
+    Session.setSubmapInstalled(root.submapInstalled)
     root.activateSubmap()
     watchdogTimer.interval = root.watchdogMs
     watchdogTimer.restart()
@@ -388,16 +391,33 @@ Item {
   }
 
   function activateSubmap() {
-    if (root.overlayExclusive) {
+    var wantSubmap = root.inputPath !== "overlay"
+    if (!wantSubmap || !root.submapInstalled) {
+      root.overlayExclusive = true
+      Session.setInputPath("overlay")
       Session.setSubmap(false)
+      if (wantSubmap && !root.submapInstalled) {
+        root.bindingsWarning = "Paste bindings.lua into ~/.config/hypr/bindings.lua. Using overlay keys until the hints submap exists."
+        Session.setBindingsWarning(root.bindingsWarning)
+      }
       return
     }
+    root.overlayExclusive = false
+    Session.setInputPath("submap")
     root.dispatchHypr(Actions.submapCmd("hints"))
     Session.setSubmap(true)
   }
 
   function resetSubmap() {
-    root.dispatchHypr(Actions.submapCmd("reset"))
+    if (root.submapInstalled) {
+      try {
+        var snap = Session.snapshot()
+        if (snap.submapActive)
+          root.dispatchHypr(Actions.submapCmd("reset"))
+      } catch (e) {
+        root.dispatchHypr(Actions.submapCmd("reset"))
+      }
+    }
     Session.setSubmap(false)
   }
 
@@ -506,6 +526,8 @@ Item {
       swapCapable: root.swapCapable,
       helper: root.helperIsBinary ? "binary" : "compat",
       inputPath: root.inputPath,
+      submapInstalled: root.submapInstalled,
+      bindingsWarning: root.bindingsWarning,
       bindCollision: root.bindCollision,
       status: root.lastStatus,
       error: root.lastError
@@ -523,11 +545,12 @@ Item {
   }
 
   function checkBinds() {
-    root.enqueueWork([root.helperCommand(), "binds-check", "SUPER", "F"], function (text) {
+    var bind = Config.parseBind(root.suggestedBind)
+    root.enqueueWork([root.helperCommand(), "binds-check", bind.mods, bind.key], function (text) {
       try {
         var data = JSON.parse(String(text || "{}"))
         root.bindCollision = !!data.collision
-        if (data.suggested)
+        if (data.collision && data.suggested)
           root.suggestedBind = String(data.suggested)
       } catch (e) {
         root.bindCollision = false
@@ -536,7 +559,19 @@ Item {
   }
 
   function installSubmap() {
-    root.enqueueWork([root.helperCommand(), "submap", "install"], null)
+    root.enqueueWork([root.helperCommand(), "submap", "install"], function (text) {
+      var result = Config.parseInstall(text)
+      root.submapInstalled = !!result.installed
+      root.submapInstallTried = true
+      if (root.submapInstalled) {
+        root.bindingsWarning = ""
+      } else {
+        root.bindingsWarning = "Paste bindings.lua into ~/.config/hypr/bindings.lua. Using overlay keys until the hints submap exists."
+      }
+      Session.setSubmapInstalled(root.submapInstalled)
+      Session.setBindingsWarning(root.bindingsWarning)
+      root.publish()
+    })
   }
 
   Process {
@@ -615,72 +650,14 @@ Item {
     }
   }
 
-  Socket {
-    id: eventSock
-    path: {
-      try {
-        if (Hyprland.eventSocketPath)
-          return Hyprland.eventSocketPath
-      } catch (e) {
-      }
-      var runtime = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
-      var sig = Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || ""
-      if (!sig)
-        return ""
-      return runtime + "/hypr/" + sig + "/.socket2.sock"
-    }
-    connected: false
-    onConnectedChanged: {
-      if (connected) {
-        root.socketBackoffMs = 250
-        root.lastStatus = "socket-connected"
-        reconnectTimer.stop()
-      } else if (root.socketWanted && !root.hyprlandEventsLive) {
-        reconnectTimer.interval = root.socketBackoffMs
-        reconnectTimer.start()
-      }
-    }
-    onError: {
-      if (!root.hyprlandEventsLive) {
-        reconnectTimer.interval = root.socketBackoffMs
-        reconnectTimer.start()
-      }
-    }
-  }
-
   Connections {
     target: Hyprland
     function onRawEvent(event) {
       if (!event)
         return
       root.hyprlandEventsLive = true
-      if (eventSock.connected)
-        eventSock.connected = false
       var line = String(event.name || "") + ">>" + String(event.data || "")
       root.handleLine(line)
-    }
-  }
-
-  Timer {
-    id: socketFallbackTimer
-    interval: 2000
-    repeat: false
-    running: true
-    onTriggered: {
-      if (!root.hyprlandEventsLive && eventSock.path && eventSock.path.length)
-        eventSock.connected = true
-    }
-  }
-
-  Timer {
-    id: reconnectTimer
-    interval: 250
-    repeat: false
-    onTriggered: {
-      if (!root.hyprlandEventsLive && root.socketWanted) {
-        root.socketBackoffMs = Math.min(root.socketBackoffMs * 2, 4000)
-        eventSock.connected = true
-      }
     }
   }
 
@@ -746,7 +723,7 @@ Item {
     function dismiss(): string { return root.endHint("dismiss") }
     function end(reason: string): string { return root.endHint(reason || "end") }
     function ping(): string { return "ok" }
-    function status(): string { return root.statusJson() }
+    function status(arg: string): string { return root.statusJson() }
     function begin(payload: string): string { return root.beginHint(payload) }
     function markFirstRun(): string {
       root.firstRunShown = true

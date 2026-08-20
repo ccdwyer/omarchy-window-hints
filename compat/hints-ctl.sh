@@ -110,32 +110,79 @@ cmd_submap() {
 }
 
 cmd_swap_probe() {
-  ver=$(run_hypr version 2>/dev/null || printf '')
-  case "$ver" in
-    *[Hh]yprland*0.5[5-9]*|*[Hh]yprland*[1-9].*)
-      ok '{"ok":true,"capable":true,"reason":"hyprland-0.55-target-swap"}'
-      return
+  if ! have_hypr; then
+    ok '{"ok":true,"capable":false,"reason":"no-hyprctl"}'
+    return
+  fi
+  # Same dispatcher string QML uses. Dummy address: syntax accepted ⇒ capable.
+  help=$("$HYPR" dispatch "swapwindow address:0x0" 2>&1 || true)
+  case "$help" in
+    *'l|r|u|d'*|*'l/r/u/d'*|[Ii]nvalid\ direction*)
+      ok '{"ok":true,"capable":false,"reason":"directional-only"}'
+      ;;
+    *[Ii]nvalid\ window*|[Ww]indow\ not\ found*|*"couldn't find"*|*"no such window"*|*"unknown window"*)
+      ok '{"ok":true,"capable":true,"reason":"dispatch-accepted-address"}'
+      ;;
+    *address:*)
+      ok '{"ok":true,"capable":true,"reason":"dispatch-mentions-address"}'
+      ;;
+    *)
+      ok '{"ok":true,"capable":false,"reason":"unknown"}'
       ;;
   esac
-  help=$(run_hypr dispatch swapwindow 2>&1 || true)
-  case "$help" in
-    *address*) ok '{"ok":true,"capable":true,"reason":"help-mentions-address"}' ;;
-    *target*) ok '{"ok":true,"capable":true,"reason":"help-mentions-target"}' ;;
-    *l\|r\|u\|d*|*direction*) ok '{"ok":true,"capable":false,"reason":"directional-only"}' ;;
-    *) ok '{"ok":true,"capable":false,"reason":"unknown"}' ;;
-  esac
+}
+
+binds_collision() {
+  mods=$1
+  key=$2
+  raw=$3
+  mods_l=$(printf '%s' "$mods" | tr 'A-Z' 'a-z')
+  key_l=$(printf '%s' "$key" | tr 'A-Z' 'a-z')
+  printf '%s' "$raw" | awk -v mods="$mods_l" -v key="$key_l" '
+    BEGIN { RS="{"; found=0 }
+    {
+      rec = tolower($0)
+      if (index(rec, "\"key\": \"" key "\"") == 0 && index(rec, "\"key\":\"" key "\"") == 0) next
+      modmask = 0
+      if (match(rec, /"modmask":[ \t]*[0-9]+/)) {
+        n = substr(rec, RSTART, RLENGTH)
+        sub(/.*:/, "", n)
+        gsub(/[ \t]/, "", n)
+        modmask = n + 0
+      }
+      superbit = (int(modmask / 64) % 2 == 1)
+      if (index(mods, "super") > 0) {
+        if (superbit || index(rec, "super") > 0) { found=1; exit }
+        next
+      }
+      if (index(rec, mods) > 0) { found=1; exit }
+    }
+    END { exit found ? 0 : 1 }
+  '
 }
 
 cmd_binds_check() {
   mods=${1:-SUPER}
   key=${2:-F}
-  raw=$(run_hypr -j binds 2>/dev/null || printf '[]')
+  if [ "$key" = ";" ]; then
+    key="semicolon"
+  fi
+  if have_hypr; then
+    raw=$("$HYPR" -j binds 2>/dev/null || printf '[]')
+  else
+    raw='[]'
+  fi
   collision=false
-  printf '%s' "$raw" | grep -qi "\"key\": *\"$key\"" && collision=true
+  if binds_collision "$mods" "$key" "$raw"; then
+    collision=true
+  fi
   if [ "$collision" = true ]; then
     suggested="SUPER+H"
   else
     suggested="${mods}+${key}"
+    if [ "$key" = "semicolon" ]; then
+      suggested="${mods}+;"
+    fi
   fi
   printf '{"ok":true,"collision":%s,"suggested":"%s","alternates":["SUPER+H","SUPER+;"]}\n' \
     "$collision" "$(json_escape "$suggested")"

@@ -348,10 +348,27 @@ test("swap: same-workspace only; cross-workspace refused", () => {
   assert.strictEqual(Swap.canSwap(a, b, false).reason, "greyed")
 })
 
-test("swap probe parser: directional vs address", () => {
-  assert.strictEqual(Swap.parseSwapProbe("usage: swapwindow l|r|u|d").capable, false)
-  assert.strictEqual(Swap.parseSwapProbe("swapwindow address:0x").capable, true)
+test("swap probe parser: directional vs address dispatch", () => {
+  assert.strictEqual(Swap.parseDispatchResult("usage: swapwindow l|r|u|d").capable, false)
+  assert.strictEqual(Swap.parseDispatchResult("Invalid direction, expected l/r/u/d").capable, false)
+  assert.strictEqual(Swap.parseDispatchResult("Invalid window").capable, true)
+  assert.strictEqual(Swap.parseDispatchResult("Window not found").capable, true)
+  assert.strictEqual(Swap.parseSwapProbe("{\"capable\":false,\"reason\":\"unknown\"}").capable, false)
   assert.strictEqual(Swap.parseSwapProbe("{\"capable\":true,\"reason\":\"x\"}").capable, true)
+  assert.strictEqual(Actions.swapProbeCmd(), "swapwindow address:0x0")
+})
+
+test("config: parseBind uses suggestedBind, not a hardcoded F", () => {
+  same(Config.parseBind("SUPER+H"), { mods: "SUPER", key: "H" })
+  same(Config.parseBind("SUPER + ;"), { mods: "SUPER", key: "semicolon" })
+  same(Config.parseBind(""), { mods: "SUPER", key: "F" })
+})
+
+test("config: parseInstall treats missing/false as not installed", () => {
+  assert.strictEqual(Config.parseInstall("").installed, false)
+  assert.strictEqual(Config.parseInstall("not-json").installed, false)
+  assert.strictEqual(Config.parseInstall("{\"ok\":true,\"installed\":false,\"via\":\"bindings.lua\"}").installed, false)
+  assert.strictEqual(Config.parseInstall("{\"ok\":true,\"installed\":true,\"via\":\"eval\"}").installed, true)
 })
 
 test("actions: dispatch strings", () => {

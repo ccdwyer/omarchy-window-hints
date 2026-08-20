@@ -48,26 +48,29 @@ function canSwap(focused, target, swapCapable) {
     return { ok: true, reason: "" }
 }
 
+function parseDispatchResult(text) {
+    var lower = String(text || "").toLowerCase()
+    if (lower.indexOf("l|r|u|d") >= 0 || lower.indexOf("l/r/u/d") >= 0 || lower.indexOf("invalid direction") >= 0)
+        return { capable: false, reason: "directional-only" }
+    if (lower.indexOf("invalid window") >= 0 || lower.indexOf("window not found") >= 0 || lower.indexOf("couldn't find") >= 0 || lower.indexOf("could not find") >= 0 || lower.indexOf("no such window") >= 0 || lower.indexOf("unknown window") >= 0)
+        return { capable: true, reason: "dispatch-accepted-address" }
+    if (lower.indexOf("address:") >= 0)
+        return { capable: true, reason: "dispatch-mentions-address" }
+    return { capable: false, reason: "unknown" }
+}
+
 function parseSwapProbe(text) {
     var raw = String(text || "")
     var data = null
-    if (raw.charAt(0) === "{") {
+    var trimmed = raw.replace(/^\s+/, "")
+    if (trimmed.charAt(0) === "{") {
         try {
-            data = JSON.parse(raw)
+            data = JSON.parse(trimmed)
         } catch (e) {
             data = null
         }
     }
-    if (data && typeof data === "object") {
-        return {
-            capable: !!data.capable,
-            reason: String(data.reason || "")
-        }
-    }
-    var lower = raw.toLowerCase()
-    if (lower.indexOf("l|r|u|d") >= 0 || (lower.indexOf("direction") >= 0 && lower.indexOf("address") < 0 && lower.indexOf("target") < 0))
-        return { capable: false, reason: "directional-only" }
-    if (lower.indexOf("address") >= 0 || lower.indexOf("target") >= 0)
-        return { capable: true, reason: "help-mentions-target" }
-    return { capable: false, reason: "unknown" }
+    if (data && typeof data === "object" && data.capable !== undefined)
+        return { capable: !!data.capable, reason: String(data.reason || "") }
+    return parseDispatchResult(raw)
 }

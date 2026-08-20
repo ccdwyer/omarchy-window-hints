@@ -61,6 +61,8 @@ mod tests {
         let json = r#"[{"modmask":64,"key":"F","dispatcher":"exec","arg":"thunar"}]"#;
         assert!(collision(json, "SUPER", "F"));
         assert!(!collision("[]", "SUPER", "F"));
+        let bare = r#"[{"modmask":0,"key":"F","dispatcher":"exec","arg":"x"}]"#;
+        assert!(!collision(bare, "SUPER", "F"));
     }
 
     #[test]

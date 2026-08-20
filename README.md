@@ -41,7 +41,7 @@ Suggested bind is **Super+F**. If Super+F is already taken, first summon says so
 hl.bind("SUPER + F", hl.dsp.exec_cmd("omarchy-shell shell toggle io.github.chris.window-hints '{}'"))
 ```
 
-The `hints` submap in that file is the primary input path: compositor-grabbed keys, no leak into the focused client. The overlay is a pure display. `Esc` in the submap resets even if the shell has died (`hyprctl dispatch submap reset` from a TTY is the manual recovery).
+The `hints` submap in that file is the primary input path: compositor-grabbed keys, no leak into the focused client. If the submap is not installed (a clean machine, `hyprctl eval` refused), summon **does not** enter a dead `hints` submap. The overlay takes exclusive keyboard focus instead and shows a paste-`bindings.lua` warning, so chords and Esc still work.
 
 ## IPC
 
@@ -50,7 +50,7 @@ omarchy-shell shell toggle io.github.chris.window-hints '{}'
 omarchy-shell shell summon io.github.chris.window-hints '{}'
 omarchy-shell shell hide io.github.chris.window-hints
 omarchy-shell shell call io.github.chris.window-hints key a
-omarchy-shell shell call io.github.chris.window-hints status
+omarchy-shell shell call io.github.chris.window-hints status '{}'
 ```
 
 ## Settings
@@ -79,8 +79,8 @@ Inline on the `shell.json` plugin entry. No config file of our own.
 - **25 visible windows.** Beyond that, a "+N more" chip points at window-tree plugins this one does not replace.
 - **Label freeze.** A window that closes mid-hint loses its label; that chord is never reused. New windows opening mid-hint are ignored until the next summon.
 - **Keybinds are yours to add.** First summon shows the table and, if Super+F collides, the alternates. On Hyprland 0.55, `hyprctl keyword` may refuse to install the submap at runtime — paste `bindings.lua`.
-- **Helper binary.** `bin/hints-ctl` is built by `build.sh`. If it is missing, QML uses `compat/hints-ctl.sh` and raw `hyprctl`. Submap *activation* still works; submap *definition* may need the Lua snippet.
-- **Watchdog.** 15 s idle auto-dismisses and resets the submap. Every `hyprctl` call has an 800 ms timeout; failure toasts and never leaves the overlay stuck.
+- **Helper binary.** `bin/hints-ctl` is built by `build.sh`. If it is missing, QML uses `compat/hints-ctl.sh` and raw `hyprctl`. Submap *definition* may need the Lua snippet; if install reports `installed:false`, summon stays on overlay input.
+- **Timeouts.** Queued `hyprctl` / helper `Process` jobs in the service have an 800 ms timeout. `Hyprland.dispatch` mutations and the helper's own `hyprctl` child are not wrapped in that timer. The 15 s idle watchdog still dismisses the overlay and resets a live submap.
 - **Coordinates.** Mapping is logical-coords only (no `* scale`). Rotated outputs that already report swapped width/height are subtracted; a pre-transform JSON is rotated in `globalToOutput`. If geometry looks unusable, labels fall back to a per-monitor gutter with titles.
 
 ## Tests (off-device)

@@ -1,29 +1,43 @@
 use std::env;
 use std::process::Command;
 
+pub struct RawOut {
+    pub stdout: String,
+    pub stderr: String,
+    pub success: bool,
+}
+
 pub fn hyprctl_bin() -> String {
     env::var("HINTS_HYPRCTL").unwrap_or_else(|_| "hyprctl".to_string())
 }
 
-pub fn hyprctl(args: &[&str]) -> Result<String, String> {
+pub fn hyprctl_raw(args: &[&str]) -> Result<RawOut, String> {
     let bin = hyprctl_bin();
     let output = Command::new(&bin)
         .args(args)
         .output()
         .map_err(|e| format!("failed to spawn {bin}: {e}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if !output.status.success() {
-        let mut msg = stderr.trim().to_string();
+    Ok(RawOut {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        success: output.status.success(),
+    })
+}
+
+pub fn hyprctl(args: &[&str]) -> Result<String, String> {
+    let bin = hyprctl_bin();
+    let out = hyprctl_raw(args)?;
+    if !out.success {
+        let mut msg = out.stderr.trim().to_string();
         if msg.is_empty() {
-            msg = stdout.trim().to_string();
+            msg = out.stdout.trim().to_string();
         }
         if msg.is_empty() {
-            msg = format!("{bin} exited {}", output.status);
+            msg = format!("{bin} failed");
         }
         return Err(msg);
     }
-    Ok(stdout)
+    Ok(out.stdout)
 }
 
 pub fn dispatch_submap(name: &str) -> Result<String, String> {

@@ -132,6 +132,43 @@ function apply(raw) {
     return true
 }
 
+function parseBind(spec) {
+    var raw = String(spec === undefined || spec === null ? "" : spec).trim()
+    if (!raw)
+        return { mods: "SUPER", key: "F" }
+    var norm = raw.replace(/\s+/g, "")
+    var idx = norm.lastIndexOf("+")
+    if (idx <= 0)
+        return { mods: "SUPER", key: norm || "F" }
+    var mods = norm.slice(0, idx)
+    var key = norm.slice(idx + 1)
+    if (!mods)
+        mods = "SUPER"
+    if (!key)
+        key = "F"
+    if (key === ";")
+        key = "semicolon"
+    return { mods: mods, key: key }
+}
+
+function parseInstall(text) {
+    var raw = String(text || "").trim()
+    if (!raw)
+        return { installed: false, via: "", error: "empty" }
+    try {
+        var data = JSON.parse(raw)
+        if (!data || typeof data !== "object")
+            return { installed: false, via: "", error: "unparseable" }
+        return {
+            installed: !!data.installed,
+            via: String(data.via || ""),
+            error: String(data.error || "")
+        }
+    } catch (e) {
+        return { installed: false, via: "", error: "unparseable" }
+    }
+}
+
 function reset() {
     apply(DEFAULTS)
     revision = 0

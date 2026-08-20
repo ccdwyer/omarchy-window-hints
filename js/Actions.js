@@ -21,8 +21,14 @@ function moveCmd(address, workspace) {
     return "movetoworkspacesilent " + String(workspace) + ",address:" + addr(address)
 }
 
+// Same dispatcher string the swap probe exercises. Service only
+// commits this when swapCapable is true (address targeting confirmed).
 function swapCmd(address) {
     return "swapwindow address:" + addr(address)
+}
+
+function swapProbeCmd() {
+    return swapCmd("0x0")
 }
 
 function submapCmd(name) {

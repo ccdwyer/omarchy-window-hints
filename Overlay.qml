@@ -33,6 +33,8 @@ Item {
   property string moreNote: ""
   property bool gutter: false
   property string inputPath: "submap"
+  property string bindingsWarning: ""
+  property bool submapInstalled: false
   property int paintedAt: 0
 
   property color background: Color.menu.background
@@ -126,6 +128,8 @@ Item {
     root.moreNote = snap.moreNote
     root.gutter = snap.gutter
     root.inputPath = snap.inputPath
+    root.bindingsWarning = snap.bindingsWarning || ""
+    root.submapInstalled = !!snap.submapInstalled
     root.paintedAt = snap.paintedAt
     if (!snap.opened && root.opened)
       root.opened = false
@@ -136,9 +140,11 @@ Item {
   function open(payloadJson) {
     root.opened = true
     root.callService("begin", payloadJson || "{}")
-    Qt.callLater(root.pullSession)
-    if (root.inputPath === "overlay")
-      Qt.callLater(function () { keyCatcher.forceActiveFocus() })
+    Qt.callLater(function () {
+      root.pullSession()
+      if (root.inputPath === "overlay")
+        keyCatcher.forceActiveFocus()
+    })
   }
 
   function close() {
@@ -380,7 +386,7 @@ Item {
       }
 
       Rectangle {
-        visible: root.firstRun || root.verb !== "focus" || root.swapGreyed && root.verb === "swap"
+        visible: root.bindingsWarning.length > 0 || root.firstRun || root.verb !== "focus" || root.swapGreyed && root.verb === "swap"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Style.gapsOut + 8
@@ -395,6 +401,13 @@ Item {
           id: bannerCol
           anchors.centerIn: parent
           spacing: 4
+          Text {
+            visible: root.bindingsWarning.length > 0
+            text: root.bindingsWarning
+            color: root.danger
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+          }
           Text {
             visible: root.verb === "close"
             text: "close — type a chord, Esc aborts"
@@ -417,7 +430,7 @@ Item {
             font.pixelSize: Style.font.body
           }
           Text {
-            visible: root.firstRun
+            visible: root.firstRun && !root.bindingsWarning.length
             text: root.bindCollision
                   ? (root.suggestedBind + " is taken. Try " + root.alternateBinds.join(" or ") + ".")
                   : ("bind " + root.suggestedBind + "  ·  chord focus  ·  Shift+chord swap  ·  x then chord close  ·  1-9 then chord move")

@@ -21,6 +21,8 @@ var paintedAt = 0
 var gutter = false
 var error = ""
 var submapActive = false
+var submapInstalled = false
+var bindingsWarning = ""
 var inputPath = "submap"
 
 function snapshot() {
@@ -46,6 +48,8 @@ function snapshot() {
         gutter: gutter,
         error: error,
         submapActive: submapActive,
+        submapInstalled: submapInstalled,
+        bindingsWarning: bindingsWarning,
         inputPath: inputPath
     }
 }
@@ -116,6 +120,16 @@ function setError(value) {
 
 function setSubmap(value) {
     submapActive = !!value
+    bump()
+}
+
+function setSubmapInstalled(value) {
+    submapInstalled = !!value
+    bump()
+}
+
+function setBindingsWarning(value) {
+    bindingsWarning = String(value || "")
     bump()
 }
 

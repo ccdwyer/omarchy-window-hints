@@ -1,0 +1,4 @@
+[
+  { "modmask": 0, "key": "F", "dispatcher": "exec", "arg": "something" },
+  { "modmask": 4, "key": "F", "dispatcher": "exec", "arg": "ctrl-f" }
+]

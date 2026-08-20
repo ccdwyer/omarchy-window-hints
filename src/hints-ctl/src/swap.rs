@@ -5,24 +5,36 @@ pub struct Probe {
     pub reason: String,
 }
 
-pub fn parse_help(text: &str) -> Probe {
+/// Same dispatcher string QML uses: `swapwindow address:0x…`.
+pub const SWAP_PROBE_DISPATCH: &str = "swapwindow address:0x0";
+
+pub fn parse_dispatch_result(text: &str) -> Probe {
     let lower = text.to_lowercase();
-    if lower.contains("address:") || lower.contains("address :") {
-        return Probe {
-            capable: true,
-            reason: "help-mentions-address".into(),
-        };
-    }
-    if lower.contains("target") && lower.contains("window") {
-        return Probe {
-            capable: true,
-            reason: "help-mentions-target".into(),
-        };
-    }
-    if lower.contains("l|r|u|d") || lower.contains("direction") {
+    if lower.contains("l|r|u|d")
+        || lower.contains("l/r/u/d")
+        || lower.contains("invalid direction")
+    {
         return Probe {
             capable: false,
             reason: "directional-only".into(),
+        };
+    }
+    if lower.contains("invalid window")
+        || lower.contains("window not found")
+        || lower.contains("couldn't find")
+        || lower.contains("could not find")
+        || lower.contains("no such window")
+        || lower.contains("unknown window")
+    {
+        return Probe {
+            capable: true,
+            reason: "dispatch-accepted-address".into(),
+        };
+    }
+    if lower.contains("address:") {
+        return Probe {
+            capable: true,
+            reason: "dispatch-mentions-address".into(),
         };
     }
     Probe {
@@ -31,53 +43,17 @@ pub fn parse_help(text: &str) -> Probe {
     }
 }
 
-pub fn parse_version(text: &str) -> Option<(u32, u32)> {
-    let needle = "hyprland";
-    let lower = text.to_lowercase();
-    let idx = lower.find(needle)?;
-    let rest = &text[idx + needle.len()..];
-    let mut nums = Vec::new();
-    let mut cur = String::new();
-    for c in rest.chars() {
-        if c.is_ascii_digit() {
-            cur.push(c);
-        } else if !cur.is_empty() {
-            if let Ok(n) = cur.parse::<u32>() {
-                nums.push(n);
-            }
-            cur.clear();
-            if nums.len() >= 2 {
-                break;
-            }
-        }
-    }
-    if !cur.is_empty() {
-        if let Ok(n) = cur.parse::<u32>() {
-            nums.push(n);
-        }
-    }
-    if nums.len() >= 2 {
-        Some((nums[0], nums[1]))
-    } else {
-        None
-    }
-}
-
 pub fn probe() -> Probe {
-    if let Ok(ver) = hypr::hyprctl(&["version"]) {
-        if let Some((maj, min)) = parse_version(&ver) {
-            if maj > 0 || min >= 55 {
-                return Probe {
-                    capable: true,
-                    reason: format!("hyprland-{maj}.{min}-target-swap"),
-                };
-            }
+    match hypr::hyprctl_raw(&["dispatch", SWAP_PROBE_DISPATCH]) {
+        Ok(out) => {
+            let combined = format!("{} {}", out.stdout, out.stderr);
+            parse_dispatch_result(&combined)
         }
+        Err(err) => Probe {
+            capable: false,
+            reason: err,
+        },
     }
-    let help = hypr::hyprctl(&["dispatch", "swapwindow"])
-        .or_else(|_| hypr::hyprctl(&["dispatch", "help"]))
-        .unwrap_or_default();
-    parse_help(&help)
 }
 
 #[cfg(test)]
@@ -86,23 +62,31 @@ mod tests {
 
     #[test]
     fn directional_only() {
-        let p = parse_help("usage: swapwindow l|r|u|d");
+        let p = parse_dispatch_result("Invalid direction, expected l/r/u/d");
         assert!(!p.capable);
         assert_eq!(p.reason, "directional-only");
+        let p2 = parse_dispatch_result("usage: swapwindow l|r|u|d");
+        assert!(!p2.capable);
     }
 
     #[test]
-    fn address_capable() {
-        let p = parse_help("swapwindow [direction | address:0x…]");
+    fn dummy_address_accepted() {
+        let p = parse_dispatch_result("Invalid window");
         assert!(p.capable);
+        assert_eq!(p.reason, "dispatch-accepted-address");
+        let p2 = parse_dispatch_result("Window not found");
+        assert!(p2.capable);
     }
 
     #[test]
-    fn version_055() {
-        assert_eq!(
-            parse_version("Hyprland 0.55.0 built from branch"),
-            Some((0, 55))
-        );
-        assert_eq!(parse_version("not a version"), None);
+    fn probe_cmd_matches_qml() {
+        assert_eq!(SWAP_PROBE_DISPATCH, "swapwindow address:0x0");
+    }
+
+    #[test]
+    fn unknown_stays_greyed() {
+        let p = parse_dispatch_result("");
+        assert!(!p.capable);
+        assert_eq!(p.reason, "unknown");
     }
 }
