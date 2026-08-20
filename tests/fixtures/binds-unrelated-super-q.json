@@ -1,0 +1,4 @@
+[
+  { "modmask": 0, "key": "F", "dispatcher": "exec", "arg": "bare-f" },
+  { "modmask": 64, "key": "Q", "dispatcher": "exec", "arg": "contains key F and \"modmask\":64" }
+]

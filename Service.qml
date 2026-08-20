@@ -69,6 +69,9 @@ Item {
   property var workQueue: []
   property var workCurrent: null
   property int sessionRevision: 0
+  property bool clientsReady: false
+  property bool monitorsReady: false
+  property bool frozenOnUnreadyModel: false
   property bool tearingDown: false
   property bool socketWanted: true
   property int socketBackoffMs: 250
@@ -233,6 +236,35 @@ Item {
     return HintEngine.visibleClients(root.clients, root.monitors)
   }
 
+  function modelReady() {
+    return root.clientsReady && root.monitorsReady
+  }
+
+  function paintFrozenLabels() {
+    var visible = root.snapshotVisible()
+    var assignment = HintEngine.assignSession(visible, root.alphabet, root.mru, root.maxHints)
+    var frozen = HintEngine.freezeInvocation(assignment, visible)
+    var decorated = root.decorateLabels(frozen.labels)
+    root.frozenLabels = decorated
+    Session.setLabels(decorated, frozen.overflow)
+    Session.setPaintedAt(Date.now())
+    if (!visible.length)
+      root.toast("no visible windows", 1400)
+  }
+
+  function rebuildHintSession() {
+    if (!root.hinting || !root.frozenOnUnreadyModel)
+      return
+    if (!root.modelReady())
+      return
+    root.frozenOnUnreadyModel = false
+    root.paintFrozenLabels()
+    Session.setSwap(root.swapCapable)
+    Session.setBindingsWarning(root.bindingsWarning)
+    Session.setSubmapInstalled(root.submapInstalled)
+    root.publish()
+  }
+
   function beginHint(payloadJson) {
     var payload = null
     try {
@@ -244,22 +276,18 @@ Item {
     root.ingestHostSettings(payload)
     if (!root.submapInstalled && !root.installInFlight)
       root.installSubmap()
-    if (root.hinting)
+    if (root.hinting) {
+      if (root.frozenOnUnreadyModel)
+        root.requestSnapshot("begin-retry")
       return "ok"
-    var visible = root.snapshotVisible()
-    var assignment = HintEngine.assignSession(visible, root.alphabet, root.mru, root.maxHints)
-    var frozen = HintEngine.freezeInvocation(assignment, visible)
-    var decorated = root.decorateLabels(frozen.labels)
-    root.frozenLabels = decorated
+    }
     Input.begin(Session.input())
     root.hinting = true
     Session.setHinting(true)
     Session.setOpened(true)
-    Session.setLabels(decorated, frozen.overflow)
     Session.setPrefix("")
     Session.setVerb("focus", 0)
     Session.setArmed("")
-    Session.setPaintedAt(Date.now())
     Session.setFirstRun(!root.firstRunShown, root.bindCollision, root.suggestedBind, Config.alternateBinds)
     Session.setSwap(root.swapCapable)
     Session.setError("")
@@ -269,15 +297,25 @@ Item {
     watchdogTimer.interval = root.watchdogMs
     watchdogTimer.restart()
     root.lastStatus = "hinting"
+    if (!root.modelReady()) {
+      root.frozenOnUnreadyModel = true
+      root.frozenLabels = []
+      Session.setLabels([], 0)
+      Session.setPaintedAt(Date.now())
+      root.requestSnapshot("begin-wait")
+      root.publish()
+      return "ok"
+    }
+    root.frozenOnUnreadyModel = false
+    root.paintFrozenLabels()
     root.publish()
-    if (!visible.length)
-      root.toast("no visible windows", 1400)
     return "ok"
   }
 
   function endHint(reason) {
     var was = root.hinting
     root.hinting = false
+    root.frozenOnUnreadyModel = false
     Session.setHinting(false)
     Input.reset(Session.input())
     root.resetSubmap()
@@ -301,6 +339,10 @@ Item {
   function syncLiveLabels() {
     if (!root.hinting)
       return
+    if (root.frozenOnUnreadyModel) {
+      root.rebuildHintSession()
+      return
+    }
     var visible = root.snapshotVisible()
     var live = []
     for (var i = 0; i < visible.length; i++)
@@ -496,6 +538,7 @@ Item {
     root.dispatchHyprImmediate(Actions.submapCmd("reset"))
     root.submapActivated = false
     root.hinting = false
+    root.frozenOnUnreadyModel = false
     Session.setSubmap(false)
     Session.setHinting(false)
   }
@@ -551,13 +594,21 @@ Item {
   }
 
   function requestSnapshot(reason) {
-    root.enqueueWork(["hyprctl", "-j", "clients"], function (text) {
-      root.onClientsJson(text)
-      root.enqueueWork(["hyprctl", "-j", "monitors"], function (monText) {
-        root.onMonitorsJson(monText)
-        if (root.hinting)
-          root.syncLiveLabels()
+    root.enqueueWork(["hyprctl", "-j", "clients"], function (text, ok) {
+      if (ok) {
+        root.onClientsJson(text)
+        root.clientsReady = true
+      }
+      root.enqueueWork(["hyprctl", "-j", "monitors"], function (monText, monOk) {
+        if (monOk) {
+          root.onMonitorsJson(monText)
+          root.monitorsReady = true
+        }
         root.lastStatus = reason || root.lastStatus
+        if (root.hinting && root.frozenOnUnreadyModel)
+          root.rebuildHintSession()
+        else if (root.hinting)
+          root.syncLiveLabels()
       })
     })
   }
@@ -610,20 +661,12 @@ Item {
     var body = payload || "{}"
     if (!root.hinting)
       root.beginHint(body)
-    if (shell && typeof shell.summon === "function") {
-      shell.summon(root.pluginId, body)
-      return "ok"
-    }
     Quickshell.execDetached(["omarchy-shell", "shell", "summon", root.pluginId, body])
     return "ok"
   }
 
   function hideOverlay() {
     root.endHint("hide")
-    if (shell && typeof shell.hide === "function") {
-      shell.hide(root.pluginId)
-      return "hidden"
-    }
     Quickshell.execDetached(["omarchy-shell", "shell", "hide", root.pluginId])
     return "hidden"
   }
@@ -641,6 +684,7 @@ Item {
       helper: root.helperIsBinary ? "binary" : "compat",
       inputPath: root.effectiveInputPath(),
       overlayExclusive: root.overlayExclusive,
+      modelReady: root.modelReady(),
       submapInstalled: root.submapInstalled,
       bindingsWarning: root.bindingsWarning,
       bindCollision: root.bindCollision,
@@ -736,11 +780,11 @@ Item {
         var out = String(text || "").trim()
         root.helperIsBinary = out === "binary"
         root.helperReady = true
+        root.requestSnapshot("boot")
         root.checkBinds(function () {
           root.installSubmap()
         })
         root.probeSwap()
-        root.requestSnapshot("boot")
       }
     }
   }

@@ -231,6 +231,19 @@ test("freeze: new windows mid-hint are ignored", () => {
   assert.ok(!frozen.labels.some((l) => l.address === "0xdeadbeef"))
 })
 
+test("cold start: empty model then real windows is a new freeze, not prune-only", () => {
+  HintEngine.resetSession()
+  const empty = HintEngine.assignSession([], "asdfghjkl", [], 25)
+  const frozenEmpty = HintEngine.freezeInvocation(empty, [])
+  assert.strictEqual(frozenEmpty.labels.length, 0)
+  const windows = manyWindows(6)
+  const assignment = HintEngine.assignSession(windows, "asdfghjkl", [], 25)
+  const frozen = HintEngine.freezeInvocation(assignment, windows)
+  assert.strictEqual(frozen.labels.length, 6)
+  const pruned = HintEngine.dropVanished(frozenEmpty.labels, windows.map((w) => w.address))
+  assert.strictEqual(pruned.length, 0)
+})
+
 test("geometry: scale 1.0 / 1.25 / 2.0 never multiplies", () => {
   const at = [100, 200]
   const size = [400, 300]

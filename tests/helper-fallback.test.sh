@@ -36,6 +36,12 @@ grep -q 'id: eventSock' "$SVC" || { echo "Service missing Socket fallback"; exit
 grep -q 'function finishWork' "$SVC" || { echo "Service missing onExited job finalize"; exit 1; }
 grep -q 'submap", "install", root.suggestedBind' "$SVC" || { echo "install must pass suggestedBind"; exit 1; }
 grep -q 'useOverlayInput(true)' "$SVC" || { echo "failed install must switch to exclusive overlay"; exit 1; }
+grep -q 'frozenOnUnreadyModel' "$SVC" || { echo "Service missing cold-start rebuild"; exit 1; }
+grep -q 'rebuildHintSession' "$SVC" || { echo "Service missing rebuildHintSession"; exit 1; }
+grep -q 'serviceFor' "$ROOT/Overlay.qml" && { echo "Overlay must not call undocumented serviceFor"; exit 1; }
+grep -q 'firstPartyServiceFor' "$ROOT/Overlay.qml" && { echo "Overlay must not call firstPartyServiceFor"; exit 1; }
+grep -q 'shell.summon' "$SVC" && { echo "Service must not call undocumented shell.summon"; exit 1; }
+grep -q 'shell.hide' "$SVC" && { echo "Service must not call undocumented shell.hide"; exit 1; }
 
 snap_out=$(mktemp)
 snap_err=$(mktemp)
@@ -73,6 +79,10 @@ printf '%s\n' "$col" | grep -q '"collision":true' || { echo "SUPER+F should coll
 HINTS_BINDS_FIXTURE="$ROOT/tests/fixtures/binds-f-no-super.json"
 col=$(HINTS_HYPRCTL="$mock" "$SH" binds-check SUPER F)
 printf '%s\n' "$col" | grep -q '"collision":false' || { echo "bare F must not count as SUPER+F: $col"; exit 1; }
+
+HINTS_BINDS_FIXTURE="$ROOT/tests/fixtures/binds-unrelated-super-q.json"
+col=$(HINTS_HYPRCTL="$mock" "$SH" binds-check SUPER F)
+printf '%s\n' "$col" | grep -q '"collision":false' || { echo "unrelated Super+Q must not collide Super+F: $col"; exit 1; }
 
 rm -f "$mock"
 echo "ok  helper-fallback"

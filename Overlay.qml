@@ -70,39 +70,7 @@ Item {
     return Config.DEFAULTS.fadeMs
   }
 
-  function serviceRef() {
-    if (pluginRegistry && typeof pluginRegistry.serviceFor === "function") {
-      var a = pluginRegistry.serviceFor(root.pluginId)
-      if (a)
-        return a
-    }
-    if (shell && typeof shell.serviceFor === "function") {
-      var b = shell.serviceFor(root.pluginId)
-      if (b)
-        return b
-    }
-    if (shell && typeof shell.firstPartyServiceFor === "function") {
-      var c = shell.firstPartyServiceFor(root.pluginId)
-      if (c)
-        return c
-    }
-    return null
-  }
-
   function callService(method, arg) {
-    var svc = root.serviceRef()
-    if (svc && svc !== root) {
-      if (method === "key" && typeof svc.onKey === "function")
-        return svc.onKey(arg)
-      if (method === "begin" && typeof svc.beginHint === "function")
-        return svc.beginHint(arg)
-      if (method === "end" && typeof svc.endHint === "function")
-        return svc.endHint(arg)
-      if (method === "markFirstRun" && typeof svc.firstRunShown !== "undefined") {
-        svc.firstRunShown = true
-        return "ok"
-      }
-    }
     if (method === "key")
       return root.handleKeyDirect(arg)
     if (method === "begin") {
@@ -114,6 +82,10 @@ Item {
       Quickshell.execDetached(["omarchy-shell", "window-hints", "end", arg || "hide"])
       root.finishSession()
       return "hidden"
+    }
+    if (method === "markFirstRun") {
+      Quickshell.execDetached(["omarchy-shell", "window-hints", "markFirstRun"])
+      return "ok"
     }
     return "ok"
   }
@@ -250,8 +222,9 @@ Item {
 
   function open(payloadJson) {
     root.opened = true
+    Session.setOpened(true)
     var snap = Session.snapshot()
-    if (!snap.opened)
+    if (!snap.hinting)
       root.callService("begin", payloadJson || "{}")
     Qt.callLater(function () {
       root.pullSession()
