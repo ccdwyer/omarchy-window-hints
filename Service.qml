@@ -595,15 +595,11 @@ Item {
 
   function requestSnapshot(reason) {
     root.enqueueWork(["hyprctl", "-j", "clients"], function (text, ok) {
-      if (ok) {
-        root.onClientsJson(text)
+      if (ok && root.onClientsJson(text))
         root.clientsReady = true
-      }
       root.enqueueWork(["hyprctl", "-j", "monitors"], function (monText, monOk) {
-        if (monOk) {
-          root.onMonitorsJson(monText)
+        if (monOk && root.onMonitorsJson(monText))
           root.monitorsReady = true
-        }
         root.lastStatus = reason || root.lastStatus
         if (root.hinting && root.frozenOnUnreadyModel)
           root.rebuildHintSession()
@@ -626,14 +622,18 @@ Item {
 
   function onClientsJson(text) {
     var parsed = Clients.parseClients(text)
-    if (parsed)
-      root.clients = parsed
+    if (!parsed || !parsed.ok)
+      return false
+    root.clients = parsed.clients
+    return true
   }
 
   function onMonitorsJson(text) {
     var parsed = Clients.parseMonitors(text)
-    if (parsed)
-      root.monitors = parsed
+    if (!parsed || !parsed.ok)
+      return false
+    root.monitors = parsed.monitors
+    return true
   }
 
   function handleLine(line) {
@@ -709,12 +709,20 @@ Item {
       if (ok) {
         try {
           var data = JSON.parse(String(text || "{}"))
+          var checked = bind.mods + "+" + (bind.key === "semicolon" ? ";" : bind.key)
           root.bindCollision = !!data.collision
-          if (data.collision && data.suggested)
-            root.suggestedBind = String(data.suggested)
+          if (data.collision && data.suggested) {
+            var alt = String(data.suggested)
+            if (alt !== checked) {
+              root.suggestedBind = alt
+              root.bindCollision = false
+            }
+          }
         } catch (e) {
           root.bindCollision = false
         }
+        Session.setFirstRun(!root.firstRunShown, root.bindCollision, root.suggestedBind, Config.alternateBinds)
+        root.publish()
       }
       if (typeof done === "function")
         done()

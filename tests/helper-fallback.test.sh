@@ -42,6 +42,14 @@ grep -q 'serviceFor' "$ROOT/Overlay.qml" && { echo "Overlay must not call undocu
 grep -q 'firstPartyServiceFor' "$ROOT/Overlay.qml" && { echo "Overlay must not call firstPartyServiceFor"; exit 1; }
 grep -q 'shell.summon' "$SVC" && { echo "Service must not call undocumented shell.summon"; exit 1; }
 grep -q 'shell.hide' "$SVC" && { echo "Service must not call undocumented shell.hide"; exit 1; }
+OV="$ROOT/Overlay.qml"
+grep -q 'handleKeyDirect' "$OV" && { echo "Overlay must not handle keys locally"; exit 1; }
+grep -q 'commitDirect' "$OV" && { echo "Overlay must not commit actions locally"; exit 1; }
+grep -q 'js/Input.js' "$OV" && { echo "Overlay must not import Input.js"; exit 1; }
+grep -q 'sendToService("key"' "$OV" || { echo "Overlay exclusive keys must go through sendToService"; exit 1; }
+grep -q 'window-hints' "$OV" || { echo "Overlay must forward to window-hints IPC"; exit 1; }
+grep -q 'target/' "$ROOT/.gitignore" || { echo ".gitignore must exclude cargo target/"; exit 1; }
+grep -q 'export-ignore' "$ROOT/.gitattributes" || { echo ".gitattributes must export-ignore target/"; exit 1; }
 
 snap_out=$(mktemp)
 snap_err=$(mktemp)

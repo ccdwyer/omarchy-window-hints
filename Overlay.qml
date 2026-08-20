@@ -1,15 +1,10 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "js/Session.js" as Session
 import "js/Config.js" as Config
-import "js/Input.js" as Input
-import "js/Actions.js" as Actions
-import "js/Swap.js" as Swap
 
 Item {
   id: root
@@ -70,24 +65,17 @@ Item {
     return Config.DEFAULTS.fadeMs
   }
 
-  function callService(method, arg) {
-    if (method === "key")
-      return root.handleKeyDirect(arg)
-    if (method === "begin") {
-      Quickshell.execDetached(["omarchy-shell", "window-hints", "begin", arg || "{}"])
-      root.opened = true
-      return "queued"
-    }
-    if (method === "end") {
-      Quickshell.execDetached(["omarchy-shell", "window-hints", "end", arg || "hide"])
-      root.finishSession()
-      return "hidden"
-    }
-    if (method === "markFirstRun") {
-      Quickshell.execDetached(["omarchy-shell", "window-hints", "markFirstRun"])
-      return "ok"
-    }
-    return "ok"
+  property bool awaitingService: false
+
+  // Display-only. Input, actions, watchdog, and teardown live on the
+  // keepLoaded Service. Keys go to the extra IPC target `window-hints`
+  // (not `shell call <id>`, which can land back here and recurse).
+  function sendToService(method, arg) {
+    var argv = ["omarchy-shell", "window-hints", method]
+    if (arg !== undefined && arg !== null && String(arg).length)
+      argv.push(String(arg))
+    Quickshell.execDetached(argv)
+    return "queued"
   }
 
   function pullSession() {
@@ -110,13 +98,15 @@ Item {
     root.bindingsWarning = snap.bindingsWarning || ""
     root.submapInstalled = !!snap.submapInstalled
     root.paintedAt = snap.paintedAt
-    if (!snap.opened && root.opened)
-      root.opened = false
-    if (snap.opened && !root.opened)
+    if (snap.opened || snap.hinting) {
       root.opened = true
+      root.awaitingService = false
+    } else if (!root.awaitingService) {
+      root.opened = false
+    }
   }
 
-  function key(k) { return root.handleKeyDirect(k) }
+  function key(k) { return root.sendToService("key", k) }
   function ping() { return "ok" }
   function status(arg) {
     var snap = Session.snapshot()
@@ -136,96 +126,12 @@ Item {
   function dismiss() { return root.close() }
   function end(reason) { return root.close() }
 
-  function dispatchHypr(request) {
-    if (!request)
-      return
-    try {
-      Hyprland.dispatch(request)
-    } catch (e) {
-      hyprProc.command = ["hyprctl", "dispatch"].concat(String(request).split(" "))
-      hyprProc.running = true
-    }
-  }
-
-  function finishSession() {
-    Session.resetView()
-    root.opened = false
-    root.dispatchHypr(Actions.submapCmd("reset"))
-    overlayArmTimer.stop()
-  }
-
-  function handleKeyDirect(raw) {
-    root.pullSession()
-    var snap = Session.snapshot()
-    if (!snap.opened && !snap.hinting && !root.opened)
-      return "idle"
-    var result = Input.handleKey(Session.input(), raw, snap.labels, Date.now(), Config.DEFAULTS.armMs)
-    if (result.action === "dismiss") {
-      root.finishSession()
-      return "escape"
-    }
-    if (result.action === "verb") {
-      Session.setVerb(result.verb, result.moveTo || 0)
-      Session.setPrefix("")
-      root.pullSession()
-      return result.verb
-    }
-    if (result.action === "prefix") {
-      Session.setPrefix(Session.input().prefix)
-      Session.setVerb(Session.input().verb, Session.input().moveTo)
-      root.pullSession()
-      return "prefix"
-    }
-    if (result.action === "miss") {
-      Session.setPrefix("")
-      Session.setVerb(Session.input().verb, 0)
-      root.pullSession()
-      return "miss"
-    }
-    if (result.action === "arm") {
-      Session.setArmed(result.target.address)
-      Session.setPrefix(Session.input().prefix)
-      Session.setVerb("close", 0)
-      overlayArmTimer.interval = Config.DEFAULTS.armMs
-      overlayArmTimer.restart()
-      root.pullSession()
-      return "arm"
-    }
-    if (result.action === "commit")
-      return root.commitDirect(result.verb, result.target, result.moveTo)
-    return "none"
-  }
-
-  function commitDirect(verb, target, moveTo) {
-    if (!target || !target.address) {
-      Session.setToast("window vanished", Date.now() + 1200)
-      root.finishSession()
-      return "vanished"
-    }
-    if (verb === "swap") {
-      var snap = Session.snapshot()
-      if (snap.swapGreyed) {
-        Session.setToast("swap unavailable", Date.now() + 1200)
-        Session.setPrefix("")
-        Session.setVerb("focus", 0)
-        Input.begin(Session.input())
-        root.pullSession()
-        return "greyed"
-      }
-    }
-    var plan = Actions.commit(verb, target, moveTo)
-    root.finishSession()
-    if (plan && plan.dispatch)
-      root.dispatchHypr(plan.dispatch)
-    return plan ? plan.kind : "empty"
-  }
-
   function open(payloadJson) {
     root.opened = true
-    Session.setOpened(true)
+    root.awaitingService = true
     var snap = Session.snapshot()
     if (!snap.hinting)
-      root.callService("begin", payloadJson || "{}")
+      root.sendToService("begin", payloadJson || "{}")
     Qt.callLater(function () {
       root.pullSession()
       if (root.inputPath === "overlay")
@@ -234,9 +140,9 @@ Item {
   }
 
   function close() {
-    if (root.opened)
-      root.callService("end", "hide")
+    root.awaitingService = false
     root.opened = false
+    root.sendToService("end", "hide")
   }
 
   function toggle() {
@@ -312,22 +218,6 @@ Item {
     return ""
   }
 
-  Process {
-    id: hyprProc
-    running: false
-  }
-
-  Timer {
-    id: overlayArmTimer
-    interval: 250
-    repeat: false
-    onTriggered: {
-      var snap = Session.snapshot()
-      var target = Swap.findByAddress(snap.labels, Session.input().armedAddress)
-      root.commitDirect("close", target, 0)
-    }
-  }
-
   Timer {
     interval: root.opened ? 32 : 400
     running: true
@@ -347,7 +237,7 @@ Item {
       var k = root.keyFromEvent(event)
       if (!k)
         return
-      root.callService("key", k)
+      root.sendToService("key", k)
       event.accepted = true
     }
   }
@@ -378,7 +268,7 @@ Item {
           var k = root.keyFromEvent(event)
           if (!k)
             return
-          root.callService("key", k)
+          root.sendToService("key", k)
           event.accepted = true
         }
       }

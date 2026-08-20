@@ -181,10 +181,15 @@ fn cmd_binds_check(args: &[String]) -> Result<String, String> {
     let key = args.get(1).map(String::as_str).unwrap_or("F");
     let raw = hypr::hyprctl(&["-j", "binds"]).unwrap_or_else(|_| "[]".into());
     let hit = binds::collision(&raw, mods, key);
-    let suggested = if hit {
-        binds::first_free_alternate(&raw).unwrap_or_else(|| "SUPER+H".into())
+    let original = if key == "semicolon" {
+        format!("{mods}+;")
     } else {
         format!("{mods}+{key}")
+    };
+    let suggested = if hit {
+        binds::first_free_alternate(&raw).unwrap_or(original)
+    } else {
+        original
     };
     Ok(format!(
         "{{\"ok\":true,\"collision\":{},\"suggested\":{},\"alternates\":[\"SUPER+H\",\"SUPER+;\"]}}",

@@ -84,28 +84,35 @@ function parseClient(raw) {
     }
 }
 
-function parseClients(text) {
+function parseJsonArray(text) {
     var data = text
     if (typeof text === "string") {
         try {
             data = JSON.parse(text)
         } catch (e) {
-            return []
+            return { ok: false, value: [] }
         }
     }
     if (!Array.isArray(data))
-        return []
+        return { ok: false, value: [] }
+    return { ok: true, value: data }
+}
+
+function parseClients(text) {
+    var bag = parseJsonArray(text)
+    if (!bag.ok)
+        return { ok: false, clients: [] }
     var out = []
-    for (var i = 0; i < data.length; i++) {
+    for (var i = 0; i < bag.value.length; i++) {
         try {
-            var c = parseClient(data[i])
+            var c = parseClient(bag.value[i])
             if (c)
                 out.push(c)
         } catch (err) {
             // Feature-detect: skip a malformed client rather than crash.
         }
     }
-    return out
+    return { ok: true, clients: out }
 }
 
 function parseMonitor(raw) {
@@ -143,26 +150,19 @@ function parseMonitor(raw) {
 }
 
 function parseMonitors(text) {
-    var data = text
-    if (typeof text === "string") {
-        try {
-            data = JSON.parse(text)
-        } catch (e) {
-            return []
-        }
-    }
-    if (!Array.isArray(data))
-        return []
+    var bag = parseJsonArray(text)
+    if (!bag.ok)
+        return { ok: false, monitors: [] }
     var out = []
-    for (var i = 0; i < data.length; i++) {
+    for (var i = 0; i < bag.value.length; i++) {
         try {
-            var m = parseMonitor(data[i])
+            var m = parseMonitor(bag.value[i])
             if (m && !m.disabled)
                 out.push(m)
         } catch (err) {
         }
     }
-    return out
+    return { ok: true, monitors: out }
 }
 
 function fromToplevel(top) {

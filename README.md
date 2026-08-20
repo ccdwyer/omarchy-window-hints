@@ -41,7 +41,7 @@ Suggested bind is **Super+F**. If Super+F is already taken, first summon says so
 hl.bind("SUPER + F", hl.dsp.exec_cmd("omarchy-shell shell toggle io.github.chris.window-hints '{}'"))
 ```
 
-The `hints` submap is the load-bearing input path. Chord keys are sent to the plugin’s registered IPC target `window-hints` (`omarchy-shell window-hints key a`), not through `shell call <plugin-id>` (that would hit the overlay and must not bounce). Summon activates `submap hints` only after install reports `installed:true`. If install fails, the overlay takes exclusive keyboard focus until bindings exist so a cold judge is never inputless; a banner tells you to paste `bindings.lua`. Recovery is `hyprctl dispatch submap reset`. Setting `inputPath: "overlay"` forces exclusive overlay keys even when the submap is installed.
+The `hints` submap is the load-bearing input path. Chord keys are sent to the plugin’s registered IPC target `window-hints` (`omarchy-shell window-hints key a`), not through `shell call <plugin-id>` (that would hit the overlay and must not bounce). The overlay is display-only in both submap and exclusive-fallback modes: exclusive overlay keystrokes are forwarded to that same `window-hints` target so the service owns input, actions, the watchdog, and teardown. Summon activates `submap hints` only after install reports `installed:true`. If install fails, the overlay takes exclusive keyboard focus until bindings exist so a cold judge is never inputless; a banner tells you to paste `bindings.lua`. Recovery is `hyprctl dispatch submap reset`. Setting `inputPath: "overlay"` forces exclusive overlay keys even when the submap is installed.
 
 ## IPC
 

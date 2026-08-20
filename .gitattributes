@@ -1,0 +1,4 @@
+target/ export-ignore
+**/target/ export-ignore
+src/hints-ctl/target/ export-ignore
+bin/hints-ctl export-ignore

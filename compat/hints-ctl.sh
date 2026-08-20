@@ -241,13 +241,23 @@ cmd_binds_check() {
   if binds_collision "$mods" "$key" "$raw"; then
     collision=true
   fi
-  if [ "$collision" = true ]; then
-    suggested="SUPER+H"
+  if [ "$key" = "semicolon" ]; then
+    original="${mods}+;"
   else
-    suggested="${mods}+${key}"
-    if [ "$key" = "semicolon" ]; then
-      suggested="${mods}+;"
+    original="${mods}+${key}"
+  fi
+  if [ "$collision" = true ]; then
+    if binds_collision SUPER H "$raw"; then
+      if binds_collision SUPER semicolon "$raw"; then
+        suggested="$original"
+      else
+        suggested="SUPER+;"
+      fi
+    else
+      suggested="SUPER+H"
     fi
+  else
+    suggested="$original"
   fi
   printf '{"ok":true,"collision":%s,"suggested":"%s","alternates":["SUPER+H","SUPER+;"]}\n' \
     "$collision" "$(json_escape "$suggested")"

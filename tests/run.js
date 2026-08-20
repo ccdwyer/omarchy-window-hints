@@ -102,8 +102,20 @@ function manyWindows(n) {
   return out
 }
 
+function parsedClients(src) {
+  const r = Clients.parseClients(src)
+  assert.strictEqual(r.ok, true)
+  return r.clients
+}
+
+function parsedMonitors(src) {
+  const r = Clients.parseMonitors(src)
+  assert.strictEqual(r.ok, true)
+  return r.monitors
+}
+
 test("clients: parse tiled fixture and normalize address", () => {
-  const clients = Clients.parseClients(fixture("clients-six.json"))
+  const clients = parsedClients(fixture("clients-six.json"))
   assert.strictEqual(clients.length, 6)
   assert.strictEqual(clients[0].address, "0xaaa1")
   assert.strictEqual(clients[0].className, "firefox")
@@ -120,14 +132,23 @@ test("clients: sparse / missing optional fields never throw", () => {
 })
 
 test("clients: malformed payload is empty not throw", () => {
-  same(Clients.parseClients("not-json"), [])
-  same(Clients.parseClients("{}"), [])
+  const bad = Clients.parseClients("not-json")
+  assert.strictEqual(bad.ok, false)
+  same(bad.clients, [])
+  const obj = Clients.parseClients("{}")
+  assert.strictEqual(obj.ok, false)
+  same(obj.clients, [])
+  const empty = Clients.parseClients("[]")
+  assert.strictEqual(empty.ok, true)
+  same(empty.clients, [])
+  assert.strictEqual(Clients.parseMonitors("not-json").ok, false)
+  assert.strictEqual(Clients.parseMonitors("[]").ok, true)
   assert.strictEqual(Clients.parseClient(null), null)
 })
 
 test("visibility: per-monitor activeWorkspace, not a global singleton", () => {
-  const clients = Clients.parseClients(fixture("clients-six.json"))
-  const monitors = Clients.parseMonitors(fixture("monitors-mixed-scale.json"))
+  const clients = parsedClients(fixture("clients-six.json"))
+  const monitors = parsedMonitors(fixture("monitors-mixed-scale.json"))
   const vis = HintEngine.visibleClients(clients, monitors)
   assert.strictEqual(vis.length, 6)
   const ws1 = vis.filter((c) => c.workspace.id === 1)
@@ -137,17 +158,17 @@ test("visibility: per-monitor activeWorkspace, not a global singleton", () => {
 })
 
 test("visibility: monitor -1 and hidden special are excluded", () => {
-  const clients = Clients.parseClients(fixture("clients-hidden-special.json"))
-  const monitors = Clients.parseMonitors(fixture("monitors-single.json"))
+  const clients = parsedClients(fixture("clients-hidden-special.json"))
+  const monitors = parsedMonitors(fixture("monitors-single.json"))
   const vis = HintEngine.visibleClients(clients, monitors)
   assert.strictEqual(vis.length, 1)
   assert.strictEqual(vis[0].address, "0xvis1")
 })
 
 test("visibility: shown special workspace is included", () => {
-  const monitors = Clients.parseMonitors(fixture("monitors-single.json"))
+  const monitors = parsedMonitors(fixture("monitors-single.json"))
   monitors[0].specialWorkspace = { id: -97, name: "special:magic" }
-  const clients = Clients.parseClients(fixture("clients-hidden-special.json"))
+  const clients = parsedClients(fixture("clients-hidden-special.json"))
   const vis = HintEngine.visibleClients(clients, monitors)
   const addrs = vis.map((c) => c.address).sort()
   same(addrs, ["0xspec1", "0xvis1"])
