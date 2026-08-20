@@ -389,8 +389,9 @@ test("swap probe parser: directional vs address dispatch", () => {
   assert.strictEqual(Swap.parseDispatchResult("Window not found").capable, true)
   assert.strictEqual(Swap.parseSwapProbe("{\"capable\":false,\"reason\":\"unknown\"}").capable, false)
   assert.strictEqual(Swap.parseSwapProbe("{\"capable\":true,\"reason\":\"x\"}").capable, true)
-  assert.strictEqual(Actions.swapProbeCmd(), "swapwindow address:0x0")
-  same(Actions.swapProbeArgv(), ["swapwindow", "address:0x0"])
+  assert.strictEqual(Actions.swapProbeCmd(), 'hl.dsp.window.swap({ target = "address:0x0" })')
+  same(Actions.swapProbeArgv(), ["hyprctl", "dispatch", 'hl.dsp.window.swap({ target = "address:0x0" })'])
+  assert.strictEqual(Swap.parseDispatchResult("target window not found").capable, true)
 })
 
 test("config: injected settings beat Item defaults", () => {
@@ -434,14 +435,27 @@ test("config: parseInstall treats missing/false as not installed", () => {
 })
 
 test("actions: dispatch strings", () => {
-  assert.strictEqual(Actions.focusCmd("AAA"), "focuswindow address:0xaaa")
-  assert.strictEqual(Actions.closeCmd("0x1"), "closewindow address:0x1")
-  assert.strictEqual(Actions.moveCmd("0x1", 3), "movetoworkspacesilent 3,address:0x1")
+  const focus = 'hl.dsp.focus({ window = "address:0xaaa" })'
+  const close = 'hl.dsp.window.close({ window = "address:0x1" })'
+  const move = 'hl.dsp.window.move({ workspace = "3", follow = false, window = "address:0x1" })'
+  const swap = 'hl.dsp.window.swap({ target = "address:0x1" })'
+  const reset = 'hl.dsp.submap("reset")'
+  assert.strictEqual(Actions.focusCmd("AAA"), focus)
+  assert.strictEqual(Actions.closeCmd("0x1"), close)
+  assert.strictEqual(Actions.moveCmd("0x1", 3), move)
+  assert.strictEqual(Actions.swapCmd("0x1"), swap)
+  assert.strictEqual(Actions.submapCmd("reset"), reset)
   const plan = Actions.commit("focus", { address: "0x1" }, 0)
   assert.strictEqual(plan.kind, "focus")
-  same(Actions.dispatchArgv("focuswindow address:0x1"), ["hyprctl", "dispatch", "focuswindow", "address:0x1"])
-  same(Actions.dispatchArgv("submap reset"), ["hyprctl", "dispatch", "submap", "reset"])
+  assert.strictEqual(plan.dispatch, 'hl.dsp.focus({ window = "address:0x1" })')
+  same(Actions.dispatchArgv(focus), ["hyprctl", "dispatch", focus])
+  same(Actions.dispatchArgv(reset), ["hyprctl", "dispatch", reset])
+  assert.strictEqual(Actions.dispatchArgv(focus).length, 3)
   same(Actions.dispatchArgv(""), [])
+  assert.strictEqual(
+    Actions.batch([Actions.focusCmd("0x1"), Actions.submapCmd("reset")]),
+    'dispatch hl.dsp.focus({ window = "address:0x1" }) ; dispatch hl.dsp.submap("reset")'
+  )
 })
 
 test("events: socket2 parse + unknown skipped", () => {
