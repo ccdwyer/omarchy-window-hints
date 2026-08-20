@@ -5,8 +5,9 @@ pub struct Probe {
     pub reason: String,
 }
 
-/// Same dispatcher string QML uses: `swapwindow address:0x…`.
-pub const SWAP_PROBE_DISPATCH: &str = "swapwindow address:0x0";
+/// `hyprctl dispatch <dispatcher> <argument>` — never a single combined token.
+pub const SWAP_PROBE_DISPATCHER: &str = "swapwindow";
+pub const SWAP_PROBE_ARG: &str = "address:0x0";
 
 pub fn parse_dispatch_result(text: &str) -> Probe {
     let lower = text.to_lowercase();
@@ -44,7 +45,7 @@ pub fn parse_dispatch_result(text: &str) -> Probe {
 }
 
 pub fn probe() -> Probe {
-    match hypr::hyprctl_raw(&["dispatch", SWAP_PROBE_DISPATCH]) {
+    match hypr::hyprctl_raw(&["dispatch", SWAP_PROBE_DISPATCHER, SWAP_PROBE_ARG]) {
         Ok(out) => {
             let combined = format!("{} {}", out.stdout, out.stderr);
             parse_dispatch_result(&combined)
@@ -79,8 +80,11 @@ mod tests {
     }
 
     #[test]
-    fn probe_cmd_matches_qml() {
-        assert_eq!(SWAP_PROBE_DISPATCH, "swapwindow address:0x0");
+    fn probe_argv_is_dispatcher_then_argument() {
+        assert_eq!(SWAP_PROBE_DISPATCHER, "swapwindow");
+        assert_eq!(SWAP_PROBE_ARG, "address:0x0");
+        assert!(!SWAP_PROBE_DISPATCHER.contains(' '));
+        assert!(SWAP_PROBE_ARG.starts_with("address:"));
     }
 
     #[test]

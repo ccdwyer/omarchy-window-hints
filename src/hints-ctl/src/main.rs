@@ -101,7 +101,7 @@ fn print_usage() {
         "usage:
   hints-ctl ping
   hints-ctl snapshot
-  hints-ctl submap install|reset|activate|status|script
+  hints-ctl submap install|reset|activate|status|script [alphabet]
   hints-ctl swap-probe
   hints-ctl binds-check [MOD] [KEY]
   hints-ctl dispatch focus|close|swap|move ADDR [WORKSPACE]"
@@ -120,26 +120,33 @@ fn cmd_submap(args: &[String]) -> Result<String, String> {
     let action = args.first().map(String::as_str).unwrap_or("status");
     let id = plugin_id();
     match action {
-        "script" => Ok(submap::lua_script(&id)),
+        "script" => {
+            let alphabet = args.get(1).map(String::as_str).unwrap_or("asdfghjkl");
+            Ok(submap::lua_script(&id, alphabet))
+        }
         "install" => {
-            let script = submap::eval_install(&id);
+            let alphabet = args.get(1).map(String::as_str).unwrap_or("asdfghjkl");
+            let script = submap::eval_install(&id, alphabet);
             match hypr::hyprctl(&["eval", &script]) {
                 Ok(out) => Ok(ok_json(&[
                     ("installed", "true".into()),
                     ("via", json_escape("eval")),
+                    ("alphabet", json_escape(&submap::sanitize_alphabet(alphabet))),
                     ("output", json_escape(&out)),
                 ])),
                 Err(eval_err) => {
-                    let batch = submap::keyword_batch(&id);
+                    let batch = submap::keyword_batch(&id, alphabet);
                     match hypr::hyprctl(&["--batch", &batch]) {
                         Ok(out) => Ok(ok_json(&[
                             ("installed", "true".into()),
                             ("via", json_escape("keyword")),
+                            ("alphabet", json_escape(&submap::sanitize_alphabet(alphabet))),
                             ("output", json_escape(&out)),
                         ])),
                         Err(kw_err) => Ok(ok_json(&[
                             ("installed", "false".into()),
                             ("via", json_escape("bindings.lua")),
+                            ("alphabet", json_escape(&submap::sanitize_alphabet(alphabet))),
                             ("error", json_escape(&format!("{eval_err}; {kw_err}"))),
                         ])),
                     }
@@ -194,19 +201,22 @@ fn cmd_dispatch(args: &[String]) -> Result<String, String> {
     }
     let verb = args[0].as_str();
     let addr = binds::normalize_address(&args[1]);
-    let cmd = match verb {
-        "focus" => format!("focuswindow address:{addr}"),
-        "close" => format!("closewindow address:{addr}"),
-        "swap" => format!("swapwindow address:{addr}"),
+    let (dispatcher, argument) = match verb {
+        "focus" => ("focuswindow".to_string(), format!("address:{addr}")),
+        "close" => ("closewindow".to_string(), format!("address:{addr}")),
+        "swap" => ("swapwindow".to_string(), format!("address:{addr}")),
         "move" => {
             let ws = args.get(2).map(String::as_str).unwrap_or("1");
-            format!("movetoworkspacesilent {ws},address:{addr}")
+            (
+                "movetoworkspacesilent".to_string(),
+                format!("{ws},address:{addr}"),
+            )
         }
         other => return Err(format!("unknown dispatch verb: {other}")),
     };
-    let out = hypr::hyprctl(&["dispatch", &cmd])?;
+    let out = hypr::hyprctl(&["dispatch", &dispatcher, &argument])?;
     Ok(ok_json(&[
-        ("dispatched", json_escape(&cmd)),
+        ("dispatched", json_escape(&format!("{dispatcher} {argument}"))),
         ("output", json_escape(&out)),
     ]))
 }

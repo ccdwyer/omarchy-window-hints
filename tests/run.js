@@ -356,6 +356,28 @@ test("swap probe parser: directional vs address dispatch", () => {
   assert.strictEqual(Swap.parseSwapProbe("{\"capable\":false,\"reason\":\"unknown\"}").capable, false)
   assert.strictEqual(Swap.parseSwapProbe("{\"capable\":true,\"reason\":\"x\"}").capable, true)
   assert.strictEqual(Actions.swapProbeCmd(), "swapwindow address:0x0")
+  same(Actions.swapProbeArgv(), ["swapwindow", "address:0x0"])
+})
+
+test("config: injected settings beat Item defaults", () => {
+  const defaults = {
+    alphabet: "asdfghjkl",
+    inset: 8,
+    maxHints: 25,
+    watchdogMs: 15000,
+    armMs: 250,
+    inputPath: "submap",
+    suggestedBind: "SUPER+F"
+  }
+  const fromDefaults = Config.resolveSettings(defaults, { alphabet: "qwer", inset: 12 }, null)
+  assert.strictEqual(fromDefaults.alphabet, "qwer")
+  assert.strictEqual(fromDefaults.inset, 12)
+  assert.strictEqual(fromDefaults.maxHints, undefined)
+  const hostBound = Config.resolveSettings(Object.assign({}, defaults, { alphabet: "aoeu" }), null, null)
+  assert.strictEqual(hostBound.alphabet, "aoeu")
+  const settingsWin = Config.resolveSettings(Object.assign({}, defaults, { alphabet: "aoeu" }), { alphabet: "qwer" }, { armMs: 400 })
+  assert.strictEqual(settingsWin.alphabet, "qwer")
+  assert.strictEqual(settingsWin.armMs, 400)
 })
 
 test("config: parseBind uses suggestedBind, not a hardcoded F", () => {

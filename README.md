@@ -18,7 +18,7 @@ Then, on the machine, build the helper (optional — QML talks to `hyprctl` dire
 ~/.config/omarchy/plugins/io.github.chris.window-hints/build.sh
 ```
 
-Paste `bindings.lua` into `~/.config/hypr/bindings.lua` (or run `hints-ctl submap install`, which tries `hyprctl eval` and falls back to telling you to paste). Reload plugins if the shell was already running:
+Paste `bindings.lua` into `~/.config/hypr/bindings.lua`, or run `hints-ctl submap install [alphabet]` which generates binds for the **active** alphabet (tries `hyprctl eval`, then a keyword batch). Reload plugins if the shell was already running:
 
 ```sh
 omarchy-shell shell rescanPlugins
@@ -41,7 +41,7 @@ Suggested bind is **Super+F**. If Super+F is already taken, first summon says so
 hl.bind("SUPER + F", hl.dsp.exec_cmd("omarchy-shell shell toggle io.github.chris.window-hints '{}'"))
 ```
 
-The `hints` submap in that file is the primary input path: compositor-grabbed keys, no leak into the focused client. If the submap is not installed (a clean machine, `hyprctl eval` refused), summon **does not** enter a dead `hints` submap. The overlay takes exclusive keyboard focus instead and shows a paste-`bindings.lua` warning, so chords and Esc still work.
+The `hints` submap is the load-bearing input path: compositor-grabbed keys, no leak into the focused client. Summon always activates it (unless you set `inputPath: "overlay"`). If install could not write binds, a banner tells you to paste `bindings.lua`; recovery is `hyprctl dispatch submap reset`. Overlay-exclusive keyboard focus is only that opt-in enhancement — it is not a fallback.
 
 ## IPC
 
@@ -70,7 +70,7 @@ Inline on the `shell.json` plugin entry. No config file of our own.
 }
 ```
 
-`inputPath: "overlay"` is the latency enhancement: exclusive keyboard focus on the overlay. The submap path still ships either way.
+`alphabet` is both the chord set and the keys installed into the hints submap (the helper regenerates binds when it changes). `inputPath: "overlay"` is an optional latency enhancement (exclusive overlay focus). Leave it at `"submap"` for the compositor-grabbed path.
 
 ## Honest limitations
 
@@ -79,7 +79,7 @@ Inline on the `shell.json` plugin entry. No config file of our own.
 - **25 visible windows.** Beyond that, a "+N more" chip points at window-tree plugins this one does not replace.
 - **Label freeze.** A window that closes mid-hint loses its label; that chord is never reused. New windows opening mid-hint are ignored until the next summon.
 - **Keybinds are yours to add.** First summon shows the table and, if Super+F collides, the alternates. On Hyprland 0.55, `hyprctl keyword` may refuse to install the submap at runtime — paste `bindings.lua`.
-- **Helper binary.** `bin/hints-ctl` is built by `build.sh`. If it is missing, QML uses `compat/hints-ctl.sh` and raw `hyprctl`. Submap *definition* may need the Lua snippet; if install reports `installed:false`, summon stays on overlay input.
+- **Helper binary.** `bin/hints-ctl` is built by `build.sh`. If it is missing, QML uses `compat/hints-ctl.sh` and raw `hyprctl`. Submap *definition* may need the Lua snippet; summon still activates the `hints` submap.
 - **Timeouts.** Queued `hyprctl` / helper `Process` jobs in the service have an 800 ms timeout. `Hyprland.dispatch` mutations and the helper's own `hyprctl` child are not wrapped in that timer. The 15 s idle watchdog still dismisses the overlay and resets a live submap.
 - **Coordinates.** Mapping is logical-coords only (no `* scale`). Rotated outputs that already report swapped width/height are subtracted; a pre-transform JSON is rotated in `globalToOutput`. If geometry looks unusable, labels fall back to a per-monitor gutter with titles.
 

@@ -14,8 +14,9 @@ Conservative choices where the Omarchy / Quickshell / Hyprland API was not 100% 
 
 ## Settings
 
-- Settings arrive **inline on the shell.json entry**. There is no plugin-owned config file. Defaults live in `js/Config.js` and as QML properties on `Service.qml`. First-run / collision flags are in-memory for the process lifetime, not persisted.
+- Settings arrive **inline on the shell.json entry**. Merge order (see `Config.resolveSettings`): compiled defaults, then Item properties that differ from those defaults (host-bound), then the injected `settings` object (authoritative), then a summon payload. Root QML defaults never overwrite `settings`.
 - **`suggestedBind`** is parsed (`SUPER+F` → mods `SUPER`, key `F`) and passed to `binds-check`. Collision detection uses that pair, not a hardcoded Super+F.
+- **`alphabet`** drives both chord assignment and the generated `hints` submap. `hints-ctl submap install <alphabet>` (and the POSIX fallback) emit binds for that set, plus `x` / digits / Esc / catchall.
 
 ## Quickshell
 
@@ -25,14 +26,15 @@ Conservative choices where the Omarchy / Quickshell / Hyprland API was not 100% 
 - **`Hyprland.toplevels` / `lastIpcObject`** are the primary client model. Geometry still comes from `hyprctl -j clients` because toplevels are not documented to expose live `x`/`y`/`size` without `refreshToplevels()`.
 - **`Variants { model: Quickshell.screens }`** is the documented per-output window factory. Overlay maps labels to a screen by `monitorName`, then by global `at` containment.
 - **Theme tokens** `Color.menu.*`, `Color.accent`, `Style.*`, `PanelWindow`, `WlrLayershell` — copied from first-party clipboard / desktop-undo. Danger color tries `Color.destructive` / `Color.danger` / `Color.error`, then `#e85d4c`. Reduced motion: `Style.reduceMotion` or `OMARCHY_REDUCED_MOTION=1`.
-- **Overlay keyboard focus** defaults to `WlrKeyboardFocus.None` when the `hints` submap is installed. If install reports `installed:false` (or the user set `inputPath: "overlay"`), the overlay takes `WlrKeyboardFocus.Exclusive` and never dispatches `submap hints`.
+- **Overlay keyboard focus** is `WlrKeyboardFocus.None` on the submap path. Exclusive overlay focus is only `inputPath: "overlay"` (progressive enhancement). A failed submap *install* still *activates* `submap hints` and shows a paste-`bindings.lua` banner; it does not switch input to the overlay.
 
 ## Hyprland (Omarchy Quattro / 0.55 Lua)
 
 - **Binds are Lua.** README and `bindings.lua` use `hl.bind` / `hl.define_submap`. The plugin does not write `hyprland.conf`.
-- **`hyprctl keyword` may fail** on the non-legacy Lua parser. Submap install tries `hyprctl eval`, then a keyword batch. The helper returns `installed:false` when both fail. Summon then uses exclusive overlay input and a visible paste-`bindings.lua` banner. It does **not** activate an empty `hints` submap.
-- **Esc inside an installed submap always `submap reset`s**, even if the shell is dead. Catch-all is `hl.dsp.no_op()` so unbound keys do not leak into the focused client.
-- **Swap.** Enabled only after `hyprctl dispatch "swapwindow address:0x0"` (the same dispatcher string as the live verb) shows the compositor accepted an address target (`Invalid window` / `Window not found`). Directional-only usage (`l|r|u|d`, `Invalid direction`) or an empty/unknown reply keeps the verb greyed. Hyprland version is not used as a capability signal. Cross-workspace swap is never implemented.
+- **`hyprctl keyword` may fail** on the non-legacy Lua parser. Submap install tries `hyprctl eval`, then a keyword batch. The helper returns `installed:false` when both fail. Summon still `dispatch submap hints` (the load-bearing path) and warns to paste `bindings.lua`. Overlay exclusive input is not used as a fallback.
+- **Esc inside the submap always `submap reset`s**, even if the shell is dead. Catch-all is `hl.dsp.no_op()` so unbound keys do not leak into the focused client.
+- **Swap.** Probe is `hyprctl dispatch swapwindow address:0x0` — dispatcher and argument as separate argv tokens, matching Hyprland’s `dispatch <dispatcher> <argument>` contract. Capable only if that call shows an address target was accepted (`Invalid window` / `Window not found`). Directional-only usage keeps the verb greyed. Version is not used as a capability signal. Cross-workspace swap is never implemented.
+- **`beginHint` is idempotent.** A second begin (Overlay.open after service summon) keeps the session; only `toggleHint` / hide / Esc dismisses it.
 - **Monitor JSON `reserved`** is treated as `[top, bottom, left, right]`. Width/height are treated as already-logical layout size. `globalToOutput` never multiplies by `scale`. Rotation is applied only when `monitor.preTransform` is set; default Hyprland JSON is assumed post-transform (90° monitors report swapped width/height).
 - Address spelling is normalized to lowercase `0x…`. Optional client fields are feature-detected; a malformed client is skipped.
 

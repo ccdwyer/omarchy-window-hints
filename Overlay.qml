@@ -139,7 +139,9 @@ Item {
 
   function open(payloadJson) {
     root.opened = true
-    root.callService("begin", payloadJson || "{}")
+    var snap = Session.snapshot()
+    if (!snap.opened)
+      root.callService("begin", payloadJson || "{}")
     Qt.callLater(function () {
       root.pullSession()
       if (root.inputPath === "overlay")

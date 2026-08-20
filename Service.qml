@@ -54,6 +54,8 @@ Item {
   property bool overlayExclusive: false
   property bool submapInstalled: false
   property bool submapInstallTried: false
+  property bool submapActivated: false
+  property string installedAlphabet: ""
   property string bindingsWarning: ""
   property string lastStatus: "starting"
   property string lastError: ""
@@ -86,20 +88,20 @@ Item {
     Session.setInputPath(root.inputPath)
   }
 
-  function ingestHostSettings() {
-    var bag = {}
-    if (root.settings && typeof root.settings === "object") {
-      for (var k in root.settings) {
-        if (root.settings.hasOwnProperty(k))
-          bag[k] = root.settings[k]
-      }
+  function currentItemProps() {
+    return {
+      alphabet: root.alphabet,
+      inset: root.inset,
+      maxHints: root.maxHints,
+      watchdogMs: root.watchdogMs,
+      armMs: root.armMs,
+      inputPath: root.inputPath,
+      suggestedBind: root.suggestedBind
     }
-    var keys = ["alphabet", "inset", "maxHints", "watchdogMs", "armMs", "inputPath", "suggestedBind"]
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i]
-      if (root[key] !== undefined && root[key] !== null)
-        bag[key] = root[key]
-    }
+  }
+
+  function ingestHostSettings(payload) {
+    var bag = Config.resolveSettings(root.currentItemProps(), root.settings, payload || null)
     root.applySettingsObject(bag)
   }
 
@@ -217,16 +219,18 @@ Item {
   }
 
   function beginHint(payloadJson) {
+    var payload = null
     try {
       if (payloadJson && String(payloadJson).length && String(payloadJson) !== "{}")
-        root.applySettingsObject(JSON.parse(payloadJson))
+        payload = JSON.parse(payloadJson)
     } catch (e) {
+      payload = null
     }
-    root.ingestHostSettings()
-    if (root.hinting) {
-      root.endHint("toggle")
-      return "hidden"
-    }
+    root.ingestHostSettings(payload)
+    if (root.alphabet !== root.installedAlphabet)
+      root.installSubmap()
+    if (root.hinting)
+      return "ok"
     var visible = root.snapshotVisible()
     var assignment = HintEngine.assignSession(visible, root.alphabet, root.mru, root.maxHints)
     var frozen = HintEngine.freezeInvocation(assignment, visible)
@@ -391,32 +395,27 @@ Item {
   }
 
   function activateSubmap() {
-    var wantSubmap = root.inputPath !== "overlay"
-    if (!wantSubmap || !root.submapInstalled) {
+    if (root.inputPath === "overlay") {
       root.overlayExclusive = true
       Session.setInputPath("overlay")
       Session.setSubmap(false)
-      if (wantSubmap && !root.submapInstalled) {
-        root.bindingsWarning = "Paste bindings.lua into ~/.config/hypr/bindings.lua. Using overlay keys until the hints submap exists."
-        Session.setBindingsWarning(root.bindingsWarning)
-      }
       return
     }
     root.overlayExclusive = false
     Session.setInputPath("submap")
     root.dispatchHypr(Actions.submapCmd("hints"))
+    root.submapActivated = true
     Session.setSubmap(true)
+    if (!root.submapInstalled) {
+      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install) so the hints submap has keys. Stuck: hyprctl dispatch submap reset"
+      Session.setBindingsWarning(root.bindingsWarning)
+    }
   }
 
   function resetSubmap() {
-    if (root.submapInstalled) {
-      try {
-        var snap = Session.snapshot()
-        if (snap.submapActive)
-          root.dispatchHypr(Actions.submapCmd("reset"))
-      } catch (e) {
-        root.dispatchHypr(Actions.submapCmd("reset"))
-      }
+    if (root.submapActivated) {
+      root.dispatchHypr(Actions.submapCmd("reset"))
+      root.submapActivated = false
     }
     Session.setSubmap(false)
   }
@@ -495,7 +494,8 @@ Item {
 
   function summonOverlay(payload) {
     var body = payload || "{}"
-    root.beginHint(body)
+    if (!root.hinting)
+      root.beginHint(body)
     if (shell && typeof shell.summon === "function") {
       shell.summon(root.pluginId, body)
       return "ok"
@@ -559,14 +559,16 @@ Item {
   }
 
   function installSubmap() {
-    root.enqueueWork([root.helperCommand(), "submap", "install"], function (text) {
+    var alpha = root.alphabet || Config.DEFAULTS.alphabet
+    root.enqueueWork([root.helperCommand(), "submap", "install", alpha], function (text) {
       var result = Config.parseInstall(text)
       root.submapInstalled = !!result.installed
       root.submapInstallTried = true
+      root.installedAlphabet = alpha
       if (root.submapInstalled) {
         root.bindingsWarning = ""
       } else {
-        root.bindingsWarning = "Paste bindings.lua into ~/.config/hypr/bindings.lua. Using overlay keys until the hints submap exists."
+        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install " + alpha + "). Submap is still activated; Esc recovery: hyprctl dispatch submap reset"
       }
       Session.setSubmapInstalled(root.submapInstalled)
       Session.setBindingsWarning(root.bindingsWarning)
@@ -738,7 +740,7 @@ Item {
 
   Component.onCompleted: {
     Config.reset()
-    root.ingestHostSettings()
+    root.ingestHostSettings(null)
     helperWhichProc.running = true
     root.collectFromModule()
     root.publish()

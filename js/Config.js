@@ -36,6 +36,8 @@ var fadeAfterMs = DEFAULTS.fadeAfterMs
 var fadeMs = DEFAULTS.fadeMs
 var revision = 0
 
+var SETTING_KEYS = ["alphabet", "inset", "maxHints", "watchdogMs", "armMs", "inputPath", "suggestedBind"]
+
 function snapshot() {
     return {
         version: VERSION,
@@ -130,6 +132,38 @@ function apply(raw) {
         stackGap = asInt(data.stackGap, DEFAULTS.stackGap, 0, 24)
     revision += 1
     return true
+}
+
+function overlayBag(dst, src) {
+    if (!src || typeof src !== "object")
+        return dst
+    for (var i = 0; i < SETTING_KEYS.length; i++) {
+        var k = SETTING_KEYS[i]
+        if (src[k] !== undefined && src[k] !== null)
+            dst[k] = src[k]
+    }
+    return dst
+}
+
+function pickNonDefaults(current) {
+    var bag = {}
+    if (!current || typeof current !== "object")
+        return bag
+    for (var i = 0; i < SETTING_KEYS.length; i++) {
+        var k = SETTING_KEYS[i]
+        if (current[k] === undefined || current[k] === null)
+            continue
+        if (current[k] !== DEFAULTS[k])
+            bag[k] = current[k]
+    }
+    return bag
+}
+
+function resolveSettings(itemProps, settings, payload) {
+    var bag = pickNonDefaults(itemProps)
+    overlayBag(bag, settings)
+    overlayBag(bag, payload)
+    return bag
 }
 
 function parseBind(spec) {

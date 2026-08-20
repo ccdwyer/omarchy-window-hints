@@ -31,6 +31,10 @@ function swapProbeCmd() {
     return swapCmd("0x0")
 }
 
+function swapProbeArgv() {
+    return ["swapwindow", "address:0x0"]
+}
+
 function submapCmd(name) {
     return "submap " + String(name || "reset")
 }
