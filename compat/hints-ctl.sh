@@ -44,12 +44,15 @@ format_lua_bind() {
       mods=${spec%+*}
       key=${spec##*+}
       [ -n "$mods" ] || mods=SUPER
-      [ -n "$key" ] || key=F
+      [ -n "$key" ] || key=H
       [ "$key" = ";" ] && key=semicolon
       mods=$(printf '%s' "$mods" | sed 's/+/ + /g')
-      printf '%s' "$mods + $key"
+      formatted="$mods + $key"
+      compact=$(printf '%s' "$formatted" | tr -d '[:space:]')
+      [ "$compact" = "SUPER+F" ] && formatted="SUPER + H"
+      printf '%s' "$formatted"
       ;;
-    *) printf '%s' "SUPER + F" ;;
+    *) printf '%s' "SUPER + H" ;;
   esac
 }
 
@@ -60,12 +63,13 @@ format_keyword_bind() {
       mods=${spec%+*}
       key=${spec##*+}
       [ -n "$mods" ] || mods=SUPER
-      [ -n "$key" ] || key=F
+      [ -n "$key" ] || key=H
       [ "$key" = ";" ] && key=semicolon
       mods=$(printf '%s' "$mods" | sed 's/+/_/g')
+      [ "$mods" = "SUPER" ] && [ "$key" = "F" ] && key=H
       printf '%s,%s' "$mods" "$key"
       ;;
-    *) printf '%s' "SUPER,F" ;;
+    *) printf '%s' "SUPER,H" ;;
   esac
 }
 
@@ -82,9 +86,9 @@ cmd_snapshot() {
 ALPHABET=asdfghjkl
 
 lua_script() {
-  bind=$(format_lua_bind "${1:-${HINTS_SUGGESTED_BIND:-SUPER+F}}")
+  bind=$(format_lua_bind "${1:-${HINTS_SUGGESTED_BIND:-SUPER+H}}")
   printf '%s\n' "-- Window Hints submap. Fixed alphabet ${ALPHABET}."
-  printf '%s\n' "-- Toggle bind is suggestedBind (default SUPER+F)."
+  printf '%s\n' "-- Toggle bind is suggestedBind (default SUPER+H)."
   printf '%s\n' "hl.bind(\"${bind}\", hl.dsp.exec_cmd(\"omarchy-shell shell toggle ${PLUGIN_ID} '{}'\"))"
   printf '%s\n' "hl.define_submap(\"hints\", function()"
   i=1
@@ -111,7 +115,7 @@ lua_script() {
 }
 
 keyword_batch() {
-  kw=$(format_keyword_bind "${1:-${HINTS_SUGGESTED_BIND:-SUPER+F}}")
+  kw=$(format_keyword_bind "${1:-${HINTS_SUGGESTED_BIND:-SUPER+H}}")
   parts="keyword bind ${kw},exec,omarchy-shell shell toggle ${PLUGIN_ID} '{}'"
   parts="$parts ; keyword submap hints"
   i=1
@@ -138,7 +142,7 @@ keyword_batch() {
 
 cmd_submap() {
   action=${1:-status}
-  bind=${2:-${HINTS_SUGGESTED_BIND:-SUPER+F}}
+  bind=${2:-${HINTS_SUGGESTED_BIND:-SUPER+H}}
   case "$action" in
     script) lua_script "$bind" ;;
     install)

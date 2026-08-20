@@ -32,15 +32,6 @@ var offer = {
     chosen: ""
 }
 
-var autoClaimed = false
-
-function claimAuto() {
-    if (autoClaimed)
-        return false
-    autoClaimed = true
-    return true
-}
-
 function setOffer(next) {
     offer = next || offer
 }

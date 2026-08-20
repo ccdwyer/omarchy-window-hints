@@ -2,14 +2,61 @@
   "schemaVersion": 1,
   "id": "io.github.chris.window-hints",
   "name": "Window Hints",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "chris",
   "license": "MIT",
   "description": "Avy-style hint labels on every visible window: type a two-key chord to focus, swap, close, or move it.",
-  "kinds": ["overlay", "service"],
+  "kinds": ["overlay", "service", "bar-widget"],
   "keepLoaded": true,
   "entryPoints": {
     "overlay": "Overlay.qml",
-    "service": "Service.qml"
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Window Hints",
+    "category": "Desktop",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "inset": 8,
+      "maxHints": 25,
+      "watchdogMs": 15000,
+      "armMs": 250,
+      "inputPath": "submap",
+      "suggestedBind": "SUPER+H"
+    },
+    "schema": [
+      {
+        "key": "inset",
+        "type": "number",
+        "label": "Label inset from the window edge (px)"
+      },
+      {
+        "key": "maxHints",
+        "type": "number",
+        "label": "Maximum hinted windows"
+      },
+      {
+        "key": "watchdogMs",
+        "type": "number",
+        "label": "Idle timeout before the overlay dismisses (ms)"
+      },
+      {
+        "key": "armMs",
+        "type": "number",
+        "label": "Close-arm flash duration (ms)"
+      },
+      {
+        "key": "inputPath",
+        "type": "string",
+        "label": "Input path (submap or overlay)"
+      },
+      {
+        "key": "suggestedBind",
+        "type": "string",
+        "label": "Preferred summon combo (never SUPER+F)"
+      }
+    ]
   }
 }

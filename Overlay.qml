@@ -26,8 +26,8 @@ Item {
   property string toast: ""
   property bool firstRun: false
   property bool bindCollision: false
-  property string suggestedBind: "SUPER+F"
-  property var alternateBinds: ["SUPER+H", "SUPER+;"]
+  property string suggestedBind: "SUPER+H"
+  property var alternateBinds: ["SUPER+;", "SUPER+ALT+F"]
   property bool swapGreyed: true
   property string moreNote: ""
   property bool gutter: false
@@ -438,8 +438,10 @@ Item {
             opacity: 0.86
           }
           Text {
-            visible: root.bindOfferNeeded && !root.bindOfferCanInstall && root.bindOfferNote.length > 0
-            text: root.bindOfferNote
+            visible: root.bindOfferNeeded && root.bindOfferNote.length > 0
+            text: root.bindOfferCanInstall
+                  ? "Use the bar chip: Set hotkey / Install hints submap"
+                  : root.bindOfferNote
             color: root.danger
             font.family: root.fontFamily
             font.pixelSize: Style.font.body

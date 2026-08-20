@@ -43,8 +43,7 @@ Item {
   }
   readonly property string helperBin: pluginDir + "/bin/hints-ctl"
   readonly property string helperSh: pluginDir + "/compat/hints-ctl.sh"
-  readonly property string bindLuaPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/io.github.chris.window-hints.binds.lua"
-  property var pendingBindPlan: null
+  readonly property string installBindsPy: pluginDir + "/compat/install-binds.py"
 
   property bool helperIsBinary: false
   property bool helperReady: false
@@ -281,8 +280,6 @@ Item {
     }
     root.ingestHostSettings(payload)
     root.scanBinds()
-    if (!root.submapInstalled && !root.installInFlight)
-      root.installSubmap()
     if (root.hinting) {
       if (root.frozenOnUnreadyModel)
         root.requestSnapshot("begin-retry")
@@ -482,7 +479,7 @@ Item {
     Session.setInputPath("overlay")
     Session.setSubmap(false)
     if (warnInstall) {
-      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch 'hl.dsp.submap(\"reset\")'"
+      root.bindingsWarning = "Use the bar chip: Set hotkey / Install hints submap. Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch 'hl.dsp.submap(\"reset\")'"
       Session.setBindingsWarning(root.bindingsWarning)
     }
   }
@@ -721,8 +718,6 @@ Item {
         return
       var plan = Binds.applyScan(text)
       root.applyBindPlan(plan)
-      if (plan.needed && plan.toAdd && plan.toAdd.length && Binds.claimAuto())
-        root.installBinds("auto")
     })
   }
 
@@ -734,6 +729,8 @@ Item {
   }
 
   function installBinds(arg) {
+    if (String(arg || "") === "auto")
+      return "refused"
     root.enqueueWork(["hyprctl", "-j", "binds"], function (text, ok) {
       if (!ok) {
         root.bindOfferNote = "could not read keybinds"
@@ -749,12 +746,27 @@ Item {
         return
       }
       var lua = Binds.luaBlock(plan.toAdd)
-      if (!lua.length || lua.indexOf("hl.unbind") >= 0 || Binds.isForbiddenSuperF(plan.chosen || plan.toAdd[0].keys)) {
+      var keys = plan.chosen || Binds.pickKeys(plan.toAdd[0])
+      if (!lua.length || lua.indexOf("hl.unbind") >= 0 || Binds.isForbiddenSuperF(keys)) {
         root.applyBindPlan(plan)
         return
       }
-      root.pendingBindPlan = plan
-      bindLuaFile.setText(lua)
+      root.enqueueWork(["python3", root.installBindsPy, root.pluginId, "--summon", keys], function (out, instOk) {
+        var msg = String(out || "")
+        if (!instOk) {
+          if (msg.indexOf("XDG_RUNTIME_DIR") >= 0)
+            root.bindOfferNote = "XDG_RUNTIME_DIR is unset; refusing to write via /tmp"
+          else
+            root.bindOfferNote = "could not write ~/.config/hypr/bindings.lua"
+          root.bindOfferNeeded = true
+          root.bindOfferCanInstall = true
+          Session.setBindOffer(true, true, root.bindOfferNote)
+          root.publish()
+          return
+        }
+        root.notifyNewBinds(plan)
+        Qt.callLater(root.scanBinds)
+      })
     })
     return "ok"
   }
@@ -808,7 +820,7 @@ Item {
         root.installedAlphabet = Config.ALPHABET
         root.bindingsWarning = ""
       } else {
-        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch 'hl.dsp.submap(\"reset\")'"
+        root.bindingsWarning = "Use the bar chip: Set hotkey / Install hints submap. Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch 'hl.dsp.submap(\"reset\")'"
       }
       Session.setSubmapInstalled(root.submapInstalled)
       Session.setBindingsWarning(root.bindingsWarning)
@@ -816,30 +828,6 @@ Item {
         root.activateSubmap()
       root.publish()
     })
-  }
-
-  FileView {
-    id: bindLuaFile
-    path: root.bindLuaPath
-    printErrors: false
-    onSaved: {
-      var plan = root.pendingBindPlan
-      if (!plan)
-        return
-      root.pendingBindPlan = null
-      root.enqueueWork(["python3", root.pluginDir + "/compat/install-binds.py", root.pluginId, "--file", root.bindLuaPath], function (out, instOk) {
-        if (!instOk) {
-          root.bindOfferNote = "could not write ~/.config/hypr/bindings.lua"
-          root.bindOfferNeeded = true
-          root.bindOfferCanInstall = true
-          Session.setBindOffer(true, true, root.bindOfferNote)
-          root.publish()
-          return
-        }
-        root.notifyNewBinds(plan)
-        Qt.callLater(root.scanBinds)
-      })
-    }
   }
 
   Process {

@@ -20,10 +20,14 @@ ignored=$("$SH" submap script qwer)
 printf '%s\n' "$ignored" | grep -q 'hl.bind("a"' || { echo "fixed alphabet missing a"; exit 1; }
 printf '%s\n' "$ignored" | grep -q 'hl.bind("q"' && { echo "v1.0 must ignore custom alphabet: $ignored"; exit 1; }
 printf '%s\n' "$ignored" | grep -q 'key x' || { echo "close verb x missing"; exit 1; }
-printf '%s\n' "$ignored" | grep -q 'SUPER + F' || { echo "default script bind should be SUPER + F: $ignored"; exit 1; }
+printf '%s\n' "$ignored" | grep -q 'SUPER + H' || { echo "default script bind should be SUPER + H: $ignored"; exit 1; }
+printf '%s\n' "$ignored" | grep -q 'hl.bind("SUPER + F"' && { echo "default script must not emit SUPER + F: $ignored"; exit 1; }
 alt=$("$SH" submap script SUPER+H)
 printf '%s\n' "$alt" | grep -q 'SUPER + H' || { echo "script should honor suggestedBind SUPER+H: $alt"; exit 1; }
 printf '%s\n' "$alt" | grep -q 'hl.bind("SUPER + F"' && { echo "script must not hardcode SUPER + F when SUPER+H requested: $alt"; exit 1; }
+forced_f=$("$SH" submap script SUPER+F)
+printf '%s\n' "$forced_f" | grep -q 'hl.bind("SUPER + F"' && { echo "script must rewrite SUPER+F to SUPER+H: $forced_f"; exit 1; }
+printf '%s\n' "$forced_f" | grep -q 'SUPER + H' || { echo "script should fall back to SUPER + H instead of SUPER+F: $forced_f"; exit 1; }
 grep -q 'keyword_batch' "$SH" || { echo "POSIX helper missing keyword_batch"; exit 1; }
 grep -q -- '--batch' "$SH" || { echo "POSIX helper install missing --batch fallback"; exit 1; }
 grep -q 'format_lua_bind' "$SH" || { echo "POSIX helper missing format_lua_bind"; exit 1; }
@@ -50,10 +54,23 @@ grep -q 'sendToService("key"' "$OV" || { echo "Overlay exclusive keys must go th
 grep -q 'window-hints' "$OV" || { echo "Overlay must forward to window-hints IPC"; exit 1; }
 grep -q 'Add keybindings' "$OV" && { echo "Overlay must not offer Add keybindings"; exit 1; }
 grep -q 'notifyNewBinds' "$SVC" || { echo "Service missing notifyNewBinds"; exit 1; }
-grep -q 'claimAuto' "$SVC" || { echo "Service missing claimAuto"; exit 1; }
+grep -q 'claimAuto' "$SVC" && { echo "Service must not auto-claim binds"; exit 1; }
+grep -q 'installBinds("auto")' "$SVC" && { echo "Service must not auto-install binds"; exit 1; }
+grep -q 'bindLuaPath' "$SVC" && { echo "Service must not stage Lua via bindLuaPath"; exit 1; }
+grep -q 'window-hints.binds.lua' "$SVC" && { echo "Service must not stage generated Lua"; exit 1; }
+grep -q -- '--summon' "$SVC" || { echo "Service must install via install-binds.py --summon"; exit 1; }
 grep -q 'hl.unbind(' "$ROOT/js/Binds.js" && { echo "Binds.js must never call hl.unbind"; exit 1; }
 grep -q 'hl.unbind(' "$SVC" && { echo "Service must never call hl.unbind"; exit 1; }
 test -f "$ROOT/compat/install-binds.py" || { echo "missing compat/install-binds.py"; exit 1; }
+test -f "$ROOT/BarWidget.qml" || { echo "missing BarWidget.qml"; exit 1; }
+grep -q 'Set hotkey' "$ROOT/BarWidget.qml" || { echo "BarWidget must offer Set hotkey"; exit 1; }
+grep -q 'Install hints submap' "$ROOT/BarWidget.qml" || { echo "BarWidget must offer Install hints submap"; exit 1; }
+grep -q '"bar-widget"' "$ROOT/manifest.json" || { echo "manifest must include bar-widget kind"; exit 1; }
+grep -q '"defaultSection": "right"' "$ROOT/manifest.json" || { echo "manifest barWidget.defaultSection must be right"; exit 1; }
+grep -q 'Set hotkey' "$ROOT/README.md" || { echo "README must document opt-in Set hotkey"; exit 1; }
+grep -q -- '--remove' "$ROOT/README.md" || { echo "README Remove must document --remove"; exit 1; }
+grep -q 'omarchy plugin remove io.github.chris.window-hints' "$ROOT/README.md" || { echo "README Remove must remove the plugin"; exit 1; }
+grep -q 'BEGIN io.github.chris.window-hints' "$ROOT/README.md" || { echo "README Remove must mention the Hyprland block markers"; exit 1; }
 grep -q 'target/' "$ROOT/.gitignore" || { echo ".gitignore must exclude cargo target/"; exit 1; }
 grep -q 'export-ignore' "$ROOT/.gitattributes" || { echo ".gitattributes must export-ignore target/"; exit 1; }
 
@@ -148,4 +165,54 @@ grep -q 'hl.dsp.submap("reset")' "$log" || { echo "submap reset must dispatch lu
 grep -q '^arg3=' "$log" && { echo "submap reset lua must be a single argv: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
 
 rm -f "$mock" "$log"
+
+PY="$ROOT/compat/install-binds.py"
+cfg=$(mktemp -d)
+out="$cfg/out"
+err="$cfg/err"
+trap 'rm -rf "$cfg"' EXIT
+export XDG_CONFIG_HOME="$cfg/config"
+mkdir -p "$XDG_CONFIG_HOME/hypr"
+printf '%s\n' "-- user binds" > "$XDG_CONFIG_HOME/hypr/bindings.lua"
+
+if env -u XDG_RUNTIME_DIR python3 "$PY" io.github.chris.window-hints --file /tmp/io.github.chris.window-hints.binds.lua >"$out" 2>"$err"; then
+  echo "install-binds.py --file must fail closed without XDG_RUNTIME_DIR"
+  exit 1
+fi
+grep -q 'XDG_RUNTIME_DIR is unset' "$err" "$out" || { echo "missing fail-closed message: $(cat "$err" "$out")"; exit 1; }
+grep -q 'no /tmp fallback' "$err" "$out" || { echo "fail-closed must mention no /tmp fallback"; exit 1; }
+
+runtime=$(mktemp -d)
+export XDG_RUNTIME_DIR="$runtime"
+if python3 "$PY" io.github.chris.window-hints --file /tmp/io.github.chris.window-hints.binds.lua >"$out" 2>"$err"; then
+  echo "install-binds.py --file must refuse /tmp even when XDG_RUNTIME_DIR is set"
+  exit 1
+fi
+grep -q 'refusing to read staged Lua from /tmp' "$err" "$out" || { echo "must refuse /tmp staged Lua: $(cat "$err")"; exit 1; }
+
+if python3 "$PY" io.github.chris.window-hints --summon "SUPER + F" >"$out" 2>"$err"; then
+  echo "install-binds.py must refuse SUPER+F"
+  exit 1
+fi
+
+python3 "$PY" io.github.chris.window-hints --summon "SUPER + H" >"$out"
+grep -q '^ok$' "$out" || { echo "summon SUPER+H should print ok"; exit 1; }
+grep -q 'BEGIN io.github.chris.window-hints' "$XDG_CONFIG_HOME/hypr/bindings.lua" || { echo "summon did not write marked block"; exit 1; }
+grep -q 'hl.bind("SUPER + H"' "$XDG_CONFIG_HOME/hypr/bindings.lua" || { echo "summon missing SUPER+H bind"; exit 1; }
+grep -q 'define_submap("hints"' "$XDG_CONFIG_HOME/hypr/bindings.lua" || { echo "summon missing hints submap"; exit 1; }
+grep -q 'hl.bind("SUPER + F"' "$XDG_CONFIG_HOME/hypr/bindings.lua" && { echo "summon wrote SUPER+F"; exit 1; }
+grep -q 'hl.unbind' "$XDG_CONFIG_HOME/hypr/bindings.lua" && { echo "summon wrote hl.unbind"; exit 1; }
+
+python3 "$PY" io.github.chris.window-hints --remove >"$out"
+grep -q '^ok$' "$out" || { echo "remove should print ok"; exit 1; }
+grep -q 'BEGIN io.github.chris.window-hints' "$XDG_CONFIG_HOME/hypr/bindings.lua" && { echo "remove left the marked block"; exit 1; }
+grep -q -- '-- user binds' "$XDG_CONFIG_HOME/hypr/bindings.lua" || { echo "remove must keep other bindings"; exit 1; }
+
+grep -q 'bindLuaPath' "$SVC" && { echo "Service still stages Lua via bindLuaPath"; exit 1; }
+grep -q 'window-hints.binds.lua' "$SVC" && { echo "Service still stages generated Lua"; exit 1; }
+grep -q 'FileView' "$SVC" && { echo "Service must not FileView-stage generated Lua"; exit 1; }
+
+rm -rf "$runtime"
+trap - EXIT
+rm -rf "$cfg"
 echo "ok  helper-fallback"

@@ -13,8 +13,8 @@ var DEFAULTS = {
     watchdogMs: 15000,
     armMs: 250,
     inputPath: "submap",
-    suggestedBind: "SUPER+F",
-    alternateBinds: ["SUPER+H", "SUPER+;"],
+    suggestedBind: "SUPER+H",
+    alternateBinds: ["SUPER+;", "SUPER+ALT+F"],
     pillWidth: 36,
     pillHeight: 28,
     stackGap: 4,
@@ -149,27 +149,27 @@ function resolveSettings(itemProps, settings, payload) {
 function parseBind(spec) {
     var raw = String(spec === undefined || spec === null ? "" : spec).trim()
     if (!raw)
-        return { mods: "SUPER", key: "F" }
+        return { mods: "SUPER", key: "H" }
     var norm = raw.replace(/\s+/g, "")
     var idx = norm.lastIndexOf("+")
     if (idx <= 0)
-        return { mods: "SUPER", key: norm || "F" }
+        return { mods: "SUPER", key: norm || "H" }
     var mods = norm.slice(0, idx)
     var key = norm.slice(idx + 1)
     if (!mods)
         mods = "SUPER"
     if (!key)
-        key = "F"
+        key = "H"
     if (key === ";")
         key = "semicolon"
     return { mods: mods, key: key }
 }
 
-// Hyprland lua: "SUPER + F". Generated install uses this, not a hardcoded Super+F.
+// Hyprland lua: "SUPER + H". Generated install uses this, not a hardcoded Super+F.
 function luaBind(spec) {
     var b = parseBind(spec)
     var mods = String(b.mods || "SUPER").replace(/\+/g, " + ")
-    var key = b.key || "F"
+    var key = b.key || "H"
     if (key === ";")
         key = "semicolon"
     return mods + " + " + key
@@ -179,7 +179,7 @@ function luaBind(spec) {
 function keywordBind(spec) {
     var b = parseBind(spec)
     var mods = String(b.mods || "SUPER").replace(/\+/g, "_")
-    var key = b.key || "F"
+    var key = b.key || "H"
     if (key === ";")
         key = "semicolon"
     return mods + "," + key

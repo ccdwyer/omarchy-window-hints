@@ -395,6 +395,12 @@ test("swap probe parser: directional vs address dispatch", () => {
   assert.strictEqual(Swap.parseDispatchResult("target window not found").capable, true)
 })
 
+test("config: default suggestedBind is Super+H not Super+F", () => {
+  assert.strictEqual(Config.DEFAULTS.suggestedBind, "SUPER+H")
+  assert.ok(Config.DEFAULTS.alternateBinds.indexOf("SUPER+;") >= 0)
+  assert.ok(Config.DEFAULTS.alternateBinds.indexOf("SUPER+F") < 0)
+})
+
 test("config: injected settings beat Item defaults", () => {
   const defaults = {
     inset: 8,
@@ -402,7 +408,7 @@ test("config: injected settings beat Item defaults", () => {
     watchdogMs: 15000,
     armMs: 250,
     inputPath: "submap",
-    suggestedBind: "SUPER+F"
+    suggestedBind: "SUPER+H"
   }
   const fromDefaults = Config.resolveSettings(defaults, { inset: 12 }, null)
   assert.strictEqual(fromDefaults.inset, 12)
@@ -419,10 +425,10 @@ test("config: injected settings beat Item defaults", () => {
 test("config: parseBind uses suggestedBind, not a hardcoded F", () => {
   same(Config.parseBind("SUPER+H"), { mods: "SUPER", key: "H" })
   same(Config.parseBind("SUPER + ;"), { mods: "SUPER", key: "semicolon" })
-  same(Config.parseBind(""), { mods: "SUPER", key: "F" })
+  same(Config.parseBind(""), { mods: "SUPER", key: "H" })
   assert.strictEqual(Config.luaBind("SUPER+H"), "SUPER + H")
   assert.strictEqual(Config.luaBind("SUPER+;"), "SUPER + semicolon")
-  assert.strictEqual(Config.luaBind(""), "SUPER + F")
+  assert.strictEqual(Config.luaBind(""), "SUPER + H")
   assert.strictEqual(Config.keywordBind("SUPER+H"), "SUPER,H")
   assert.strictEqual(Config.keywordBind("SUPER+;"), "SUPER,semicolon")
   assert.strictEqual(Config.keywordBind("SUPER+F"), "SUPER,F")
@@ -606,17 +612,33 @@ test("binds: notify body lists assigned summon", () => {
   assert.strictEqual(argv[0], "omarchy")
   assert.strictEqual(argv[1], "notification")
   assert.strictEqual(argv[2], "send")
-  assert.ok(Binds.claimAuto())
-  assert.strictEqual(Binds.claimAuto(), false)
+  assert.strictEqual(typeof Binds.claimAuto, "undefined")
 })
 
-test("binds: service auto-assigns on first scan, overlay has no Add keybindings", () => {
+test("binds: no first-load auto-assign; overlay has no Add keybindings", () => {
   const src = fs.readFileSync(path.join(ROOT, "Service.qml"), "utf8")
-  assert.ok(src.indexOf("Binds.claimAuto()") >= 0)
+  assert.ok(src.indexOf("claimAuto") < 0)
+  assert.ok(src.indexOf('installBinds("auto")') < 0)
+  assert.ok(src.indexOf('=== "auto"') >= 0)
   assert.ok(src.indexOf("notifyNewBinds") >= 0)
   assert.ok(src.indexOf("compat/install-binds.py") >= 0)
+  assert.ok(src.indexOf("--summon") >= 0)
+  assert.ok(src.indexOf("bindLuaPath") < 0)
+  assert.ok(src.indexOf("window-hints.binds.lua") < 0)
+  assert.ok(src.indexOf('installBinds.py", root.pluginId, "--file"') < 0)
+  const begin = src.slice(src.indexOf("function beginHint"), src.indexOf("function endHint"))
+  assert.ok(begin.indexOf("installSubmap") < 0)
+  assert.ok(begin.indexOf("installBinds") < 0)
   const overlay = fs.readFileSync(path.join(ROOT, "Overlay.qml"), "utf8")
   assert.ok(overlay.indexOf("Add keybindings") < 0)
+  const bar = fs.readFileSync(path.join(ROOT, "BarWidget.qml"), "utf8")
+  assert.ok(bar.indexOf("Set hotkey") >= 0)
+  assert.ok(bar.indexOf("Install hints submap") >= 0)
+  const man = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"))
+  assert.ok(man.kinds.indexOf("bar-widget") >= 0)
+  assert.strictEqual(man.entryPoints.barWidget, "BarWidget.qml")
+  assert.strictEqual(man.barWidget.defaultSection, "right")
+  assert.strictEqual(man.barWidget.defaults.suggestedBind, "SUPER+H")
 })
 
 test("binds: lua block is the hints submap, chords go to window-hints, no unbind", () => {

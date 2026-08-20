@@ -122,7 +122,7 @@ fn cmd_submap(args: &[String]) -> Result<String, String> {
         .get(1)
         .map(String::as_str)
         .filter(|s| !s.is_empty())
-        .unwrap_or("SUPER+F");
+        .unwrap_or("SUPER+H");
     let id = plugin_id();
     match action {
         "script" => Ok(submap::lua_script(&id, bind)),

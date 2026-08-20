@@ -2,16 +2,23 @@
 /// digits (workspace move), and is prefix-free for one- and two-key chords.
 pub const ALPHABET: &str = "asdfghjkl";
 
+fn is_super_f(spec: &str) -> bool {
+    spec.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .eq_ignore_ascii_case("SUPER+F")
+}
+
 pub fn format_lua_bind(spec: &str) -> String {
     let compact: String = spec.chars().filter(|c| !c.is_whitespace()).collect();
-    if compact.is_empty() || !compact.contains('+') {
-        return "SUPER + F".into();
+    if compact.is_empty() || !compact.contains('+') || is_super_f(&compact) {
+        return "SUPER + H".into();
     }
     let idx = compact.rfind('+').unwrap();
     let mods = compact[..idx].replace('+', " + ");
     let mut key = compact[idx + 1..].to_string();
     if key.is_empty() {
-        key = "F".into();
+        key = "H".into();
     }
     if key == ";" {
         key = "semicolon".into();
@@ -19,19 +26,23 @@ pub fn format_lua_bind(spec: &str) -> String {
     if mods.is_empty() {
         return format!("SUPER + {key}");
     }
-    format!("{mods} + {key}")
+    let out = format!("{mods} + {key}");
+    if is_super_f(&out) {
+        return "SUPER + H".into();
+    }
+    out
 }
 
 pub fn format_keyword_bind(spec: &str) -> (String, String) {
     let compact: String = spec.chars().filter(|c| !c.is_whitespace()).collect();
-    if compact.is_empty() || !compact.contains('+') {
-        return ("SUPER".into(), "F".into());
+    if compact.is_empty() || !compact.contains('+') || is_super_f(&compact) {
+        return ("SUPER".into(), "H".into());
     }
     let idx = compact.rfind('+').unwrap();
     let mods = compact[..idx].replace('+', "_");
     let mut key = compact[idx + 1..].to_string();
     if key.is_empty() {
-        key = "F".into();
+        key = "H".into();
     }
     if key == ";" {
         key = "semicolon".into();
@@ -41,6 +52,9 @@ pub fn format_keyword_bind(spec: &str) -> (String, String) {
     } else {
         mods
     };
+    if mods == "SUPER" && key.eq_ignore_ascii_case("F") {
+        return ("SUPER".into(), "H".into());
+    }
     (mods, key)
 }
 
@@ -48,7 +62,7 @@ pub fn lua_script(plugin_id: &str, bind: &str) -> String {
     let lua_bind = format_lua_bind(bind);
     let mut body = String::new();
     body.push_str("-- Window Hints submap. Fixed alphabet asdfghjkl (v1.0).\n");
-    body.push_str("-- Toggle bind is suggestedBind (default SUPER+F).\n");
+    body.push_str("-- Toggle bind is suggestedBind (default SUPER+H).\n");
     body.push_str("hl.bind(\"");
     body.push_str(&lua_bind);
     body.push_str("\", hl.dsp.exec_cmd(\"omarchy-shell shell toggle ");
@@ -123,11 +137,12 @@ mod tests {
 
     #[test]
     fn lua_contains_escape_reset() {
-        let s = lua_script("io.github.chris.window-hints", "SUPER+F");
+        let s = lua_script("io.github.chris.window-hints", "SUPER+H");
         assert!(s.contains("hl.define_submap(\"hints\""));
         assert!(s.contains("hl.dsp.submap(\"reset\")"));
         assert!(s.contains("catchall"));
-        assert!(s.contains("SUPER + F"));
+        assert!(s.contains("SUPER + H"));
+        assert!(!s.contains("SUPER + F"));
         assert!(s.contains("omarchy-shell window-hints key a"));
         assert!(s.contains("omarchy-shell window-hints key A"));
         assert!(s.contains("omarchy-shell window-hints key 3"));
@@ -148,7 +163,7 @@ mod tests {
 
     #[test]
     fn lua_ignores_custom_alphabet_arg_is_fixed() {
-        let s = lua_script("io.github.chris.window-hints", "SUPER+F");
+        let s = lua_script("io.github.chris.window-hints", "SUPER+H");
         assert!(s.contains("hl.bind(\"a\""));
         assert!(s.contains("hl.bind(\"l\""));
         assert!(!s.contains("hl.bind(\"q\""));
@@ -156,20 +171,22 @@ mod tests {
 
     #[test]
     fn format_lua_bind_defaults_without_plus() {
-        assert_eq!(format_lua_bind("qwer"), "SUPER + F");
-        assert_eq!(format_lua_bind(""), "SUPER + F");
+        assert_eq!(format_lua_bind("qwer"), "SUPER + H");
+        assert_eq!(format_lua_bind(""), "SUPER + H");
+        assert_eq!(format_lua_bind("SUPER + F"), "SUPER + H");
         assert_eq!(format_lua_bind("SUPER + H"), "SUPER + H");
     }
 
     #[test]
     fn keyword_batch_resets() {
-        let s = keyword_batch("io.github.chris.window-hints", "SUPER+F");
+        let s = keyword_batch("io.github.chris.window-hints", "SUPER+H");
         assert!(s.contains("submap reset"));
         assert!(s.contains("submap hints"));
         assert!(s.contains("key escape"));
         assert!(s.contains(",a,exec,"));
         assert!(s.contains(",x,exec,"));
-        assert!(s.contains("SUPER,F,exec,omarchy-shell shell toggle"));
+        assert!(s.contains("SUPER,H,exec,omarchy-shell shell toggle"));
+        assert!(!s.contains("SUPER,F,exec,omarchy-shell shell toggle"));
     }
 
     #[test]
