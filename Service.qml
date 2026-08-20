@@ -69,6 +69,11 @@ Item {
   property var workQueue: []
   property var workCurrent: null
   property int sessionRevision: 0
+  property bool tearingDown: false
+  property bool socketWanted: true
+  property int socketBackoffMs: 250
+  property string workStdout: ""
+  property bool workFinalized: false
 
   function helperCommand() {
     return root.helperIsBinary ? root.helperBin : root.helperSh
@@ -84,8 +89,19 @@ Item {
     root.armMs = Config.armMs
     root.inputPath = Config.inputPath
     root.suggestedBind = Config.suggestedBind
-    root.overlayExclusive = root.inputPath === "overlay"
-    Session.setInputPath(root.inputPath)
+    if (root.hinting)
+      Session.setInputPath(root.effectiveInputPath())
+    else
+      Session.setInputPath(root.inputPath)
+    root.overlayExclusive = root.hinting && root.effectiveInputPath() === "overlay"
+  }
+
+  function effectiveInputPath() {
+    if (root.inputPath === "overlay")
+      return "overlay"
+    if (root.submapInstalled && !root.installInFlight)
+      return "submap"
+    return "overlay"
   }
 
   function currentItemProps() {
@@ -265,6 +281,8 @@ Item {
     Session.setHinting(false)
     Input.reset(Session.input())
     root.resetSubmap()
+    root.overlayExclusive = false
+    Session.setInputPath(root.inputPath)
     watchdogTimer.stop()
     armTimer.stop()
     Session.resetView()
@@ -381,30 +399,61 @@ Item {
   }
 
   function dispatchHypr(request) {
-    if (!request)
+    if (!request || root.tearingDown)
       return false
+    var argv = Actions.dispatchArgv(request)
+    if (!argv.length)
+      return false
+    root.enqueueWork(argv, function (text, ok) {
+      if (!ok) {
+        root.lastError = "hyprctl failed"
+        root.toast("hyprctl failed")
+      }
+    })
+    return true
+  }
+
+  function dispatchHyprImmediate(request) {
+    if (!request)
+      return
+    var argv = Actions.dispatchArgv(request)
     try {
       Hyprland.dispatch(request)
-      return true
     } catch (e) {
-      root.enqueueWork(["hyprctl", "dispatch"].concat(String(request).split(" ")), function (text, ok) {
-        if (!ok)
-          root.toast("hyprctl failed")
-      })
-      return true
+    }
+    try {
+      if (argv.length)
+        Quickshell.execDetached(argv)
+    } catch (e2) {
+    }
+  }
+
+  function useOverlayInput(warnInstall) {
+    root.overlayExclusive = true
+    Session.setInputPath("overlay")
+    Session.setSubmap(false)
+    if (warnInstall) {
+      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch submap reset"
+      Session.setBindingsWarning(root.bindingsWarning)
     }
   }
 
   function activateSubmap() {
+    if (root.tearingDown)
+      return
     if (root.inputPath === "overlay") {
-      root.overlayExclusive = true
+      root.useOverlayInput(false)
       root.pendingActivate = false
-      Session.setInputPath("overlay")
-      Session.setSubmap(false)
       return
     }
     if (root.installInFlight) {
       root.pendingActivate = true
+      root.useOverlayInput(false)
+      return
+    }
+    if (!root.submapInstalled) {
+      root.pendingActivate = false
+      root.useOverlayInput(true)
       return
     }
     root.overlayExclusive = false
@@ -413,34 +462,92 @@ Item {
     root.submapActivated = true
     root.pendingActivate = false
     Session.setSubmap(true)
-    if (!root.submapInstalled) {
-      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Stuck: hyprctl dispatch submap reset"
-      Session.setBindingsWarning(root.bindingsWarning)
-    }
+    Session.setBindingsWarning(root.bindingsWarning)
   }
 
   function resetSubmap() {
     if (root.submapActivated) {
-      root.dispatchHypr(Actions.submapCmd("reset"))
+      if (root.tearingDown)
+        root.dispatchHyprImmediate(Actions.submapCmd("reset"))
+      else
+        root.dispatchHypr(Actions.submapCmd("reset"))
       root.submapActivated = false
     }
     Session.setSubmap(false)
   }
 
+  function teardown() {
+    if (root.tearingDown)
+      return
+    root.tearingDown = true
+    root.socketWanted = false
+    try { eventSock.connected = false } catch (e) {}
+    pollTimer.stop()
+    watchdogTimer.stop()
+    armTimer.stop()
+    toastTimer.stop()
+    workTimeout.stop()
+    socketFallbackTimer.stop()
+    reconnectTimer.stop()
+    root.workQueue = []
+    root.workCurrent = null
+    try { workProc.running = false } catch (e2) {}
+    try { helperWhichProc.running = false } catch (e3) {}
+    root.dispatchHyprImmediate(Actions.submapCmd("reset"))
+    root.submapActivated = false
+    root.hinting = false
+    Session.setSubmap(false)
+    Session.setHinting(false)
+  }
+
   function enqueueWork(command, done) {
+    if (root.tearingDown)
+      return
     workQueue.push({ command: command, done: done || null })
     root.runWork()
   }
 
   function runWork() {
+    if (root.tearingDown)
+      return
     if (workProc.running || root.workCurrent)
       return
     if (!workQueue.length)
       return
     root.workCurrent = workQueue.shift()
+    root.workStdout = ""
+    root.workFinalized = false
     workProc.command = root.workCurrent.command
     workTimeout.restart()
     workProc.running = true
+  }
+
+  function finishWork(code, timedOut) {
+    if (root.workFinalized)
+      return
+    root.workFinalized = true
+    workTimeout.stop()
+    var job = root.workCurrent
+    root.workCurrent = null
+    try { workProc.running = false } catch (e) {}
+    var text = root.workStdout
+    try {
+      if ((!text || !text.length) && workProc.stdout && workProc.stdout.text !== undefined)
+        text = String(workProc.stdout.text || "")
+    } catch (e2) {}
+    root.workStdout = ""
+    var ok = !timedOut && code === 0
+    if (timedOut) {
+      root.lastError = "hyprctl timed out"
+      root.toast("hyprctl timed out")
+      if (root.hinting)
+        root.endHint("timeout")
+    }
+    if (job && job.done) {
+      try { job.done(text, ok) } catch (e3) { root.lastError = String(e3) }
+    }
+    if (!root.tearingDown)
+      Qt.callLater(function () { root.runWork() })
   }
 
   function requestSnapshot(reason) {
@@ -532,7 +639,8 @@ Item {
       overflow: snap.overflow,
       swapCapable: root.swapCapable,
       helper: root.helperIsBinary ? "binary" : "compat",
-      inputPath: root.inputPath,
+      inputPath: root.effectiveInputPath(),
+      overlayExclusive: root.overlayExclusive,
       submapInstalled: root.submapInstalled,
       bindingsWarning: root.bindingsWarning,
       bindCollision: root.bindCollision,
@@ -551,34 +659,38 @@ Item {
     })
   }
 
-  function checkBinds() {
+  function checkBinds(done) {
     var bind = Config.parseBind(root.suggestedBind)
-    root.enqueueWork([root.helperCommand(), "binds-check", bind.mods, bind.key], function (text) {
-      try {
-        var data = JSON.parse(String(text || "{}"))
-        root.bindCollision = !!data.collision
-        if (data.collision && data.suggested)
-          root.suggestedBind = String(data.suggested)
-      } catch (e) {
-        root.bindCollision = false
+    root.enqueueWork([root.helperCommand(), "binds-check", bind.mods, bind.key], function (text, ok) {
+      if (ok) {
+        try {
+          var data = JSON.parse(String(text || "{}"))
+          root.bindCollision = !!data.collision
+          if (data.collision && data.suggested)
+            root.suggestedBind = String(data.suggested)
+        } catch (e) {
+          root.bindCollision = false
+        }
       }
+      if (typeof done === "function")
+        done()
     })
   }
 
   function installSubmap() {
-    if (root.installInFlight)
+    if (root.installInFlight || root.tearingDown)
       return
     root.installInFlight = true
-    root.enqueueWork([root.helperCommand(), "submap", "install"], function (text) {
+    root.enqueueWork([root.helperCommand(), "submap", "install", root.suggestedBind], function (text, ok) {
       root.installInFlight = false
-      var result = Config.parseInstall(text)
+      var result = Config.parseInstall(ok ? text : "")
       root.submapInstallTried = true
       root.submapInstalled = !!result.installed
       if (root.submapInstalled) {
         root.installedAlphabet = Config.ALPHABET
         root.bindingsWarning = ""
       } else {
-        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Stuck: hyprctl dispatch submap reset"
+        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch submap reset"
       }
       Session.setSubmapInstalled(root.submapInstalled)
       Session.setBindingsWarning(root.bindingsWarning)
@@ -594,34 +706,11 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        workTimeout.stop()
-        var job = root.workCurrent
-        root.workCurrent = null
-        workProc.running = false
-        if (job && job.done) {
-          try {
-            job.done(String(text || ""), true)
-          } catch (e) {
-            root.lastError = String(e)
-          }
-        }
-        root.runWork()
+        root.workStdout = String(text || "")
       }
     }
     onExited: function (code) {
-      workTimeout.stop()
-      if (code !== 0 && root.workCurrent && root.workCurrent.done) {
-        var job = root.workCurrent
-        root.workCurrent = null
-        try {
-          job.done("", false)
-        } catch (e) {
-        }
-      } else if (code !== 0) {
-        root.workCurrent = null
-      }
-      if (!workProc.running)
-        root.runWork()
+      root.finishWork(code, false)
     }
   }
 
@@ -630,18 +719,9 @@ Item {
     interval: 800
     repeat: false
     onTriggered: {
-      if (workProc.running) {
-        workProc.running = false
-        var job = root.workCurrent
-        root.workCurrent = null
-        root.lastError = "hyprctl timed out"
-        root.toast("hyprctl timed out")
-        if (root.hinting)
-          root.endHint("timeout")
-        if (job && job.done) {
-          try { job.done("", false) } catch (e) {}
-        }
-        root.runWork()
+      if (workProc.running || root.workCurrent) {
+        try { workProc.running = false } catch (e) {}
+        root.finishWork(-1, true)
       }
     }
   }
@@ -656,10 +736,44 @@ Item {
         var out = String(text || "").trim()
         root.helperIsBinary = out === "binary"
         root.helperReady = true
-        root.installSubmap()
+        root.checkBinds(function () {
+          root.installSubmap()
+        })
         root.probeSwap()
-        root.checkBinds()
         root.requestSnapshot("boot")
+      }
+    }
+  }
+
+  Socket {
+    id: eventSock
+    path: {
+      try {
+        if (Hyprland.eventSocketPath)
+          return Hyprland.eventSocketPath
+      } catch (e) {}
+      var runtime = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+      var sig = Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || ""
+      if (!sig)
+        return ""
+      return runtime + "/hypr/" + sig + "/.socket2.sock"
+    }
+    connected: false
+    parser: SplitParser {
+      onRead: function (line) {
+        if (root.hyprlandEventsLive || root.tearingDown)
+          return
+        root.handleLine(line)
+      }
+    }
+    onConnectedChanged: {
+      if (connected) {
+        root.socketBackoffMs = 250
+        root.lastStatus = "socket-connected"
+        reconnectTimer.stop()
+      } else if (root.socketWanted && !root.hyprlandEventsLive && !root.tearingDown) {
+        reconnectTimer.interval = root.socketBackoffMs
+        reconnectTimer.start()
       }
     }
   }
@@ -670,8 +784,39 @@ Item {
       if (!event)
         return
       root.hyprlandEventsLive = true
+      if (eventSock.connected)
+        eventSock.connected = false
       var line = String(event.name || "") + ">>" + String(event.data || "")
       root.handleLine(line)
+    }
+  }
+
+  Timer {
+    id: socketFallbackTimer
+    interval: 2000
+    repeat: false
+    running: true
+    onTriggered: {
+      if (root.hyprlandEventsLive || root.tearingDown)
+        return
+      if (eventSock.path && eventSock.path.length > 0)
+        eventSock.connected = root.socketWanted
+    }
+  }
+
+  Timer {
+    id: reconnectTimer
+    interval: 250
+    repeat: false
+    onTriggered: {
+      if (root.tearingDown || root.hyprlandEventsLive)
+        return
+      root.socketBackoffMs = Math.min(root.socketBackoffMs * 2, 5000)
+      eventSock.connected = false
+      Qt.callLater(function () {
+        if (!root.hyprlandEventsLive && root.socketWanted && !root.tearingDown)
+          eventSock.connected = true
+      })
     }
   }
 
@@ -681,8 +826,11 @@ Item {
     repeat: true
     running: true
     onTriggered: {
+      if (root.tearingDown)
+        return
       root.collectFromModule()
-      root.requestSnapshot(root.hyprlandEventsLive ? "poll-geo" : "poll")
+      var live = root.hyprlandEventsLive || eventSock.connected
+      root.requestSnapshot(live ? "poll-geo" : "poll")
     }
   }
 
@@ -764,4 +912,6 @@ Item {
     root.collectFromModule()
     root.publish()
   }
+
+  Component.onDestruction: root.teardown()
 }

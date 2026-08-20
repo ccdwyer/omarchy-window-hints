@@ -118,11 +118,16 @@ fn cmd_snapshot() -> Result<String, String> {
 
 fn cmd_submap(args: &[String]) -> Result<String, String> {
     let action = args.first().map(String::as_str).unwrap_or("status");
+    let bind = args
+        .get(1)
+        .map(String::as_str)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("SUPER+F");
     let id = plugin_id();
     match action {
-        "script" => Ok(submap::lua_script(&id)),
+        "script" => Ok(submap::lua_script(&id, bind)),
         "install" => {
-            let script = submap::eval_install(&id);
+            let script = submap::eval_install(&id, bind);
             match hypr::hyprctl(&["eval", &script]) {
                 Ok(out) => Ok(ok_json(&[
                     ("installed", "true".into()),
@@ -130,7 +135,7 @@ fn cmd_submap(args: &[String]) -> Result<String, String> {
                     ("output", json_escape(&out)),
                 ])),
                 Err(eval_err) => {
-                    let batch = submap::keyword_batch(&id);
+                    let batch = submap::keyword_batch(&id, bind);
                     match hypr::hyprctl(&["--batch", &batch]) {
                         Ok(out) => Ok(ok_json(&[
                             ("installed", "true".into()),

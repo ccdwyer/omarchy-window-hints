@@ -1,8 +1,10 @@
 -- Window Hints — paste into ~/.config/hypr/bindings.lua
 --
--- Suggested bind: SUPER + F. If that collides, use SUPER + H or SUPER + ;
--- (first summon will say so). Esc always leaves the hints submap, even if
--- the shell is dead — that is the stuck-submap recovery path.
+-- Toggle bind below is the default suggestedBind (SUPER+F). Automatic
+-- install (`hints-ctl submap install <suggestedBind>`) emits this line with
+-- the live setting, including collision alternates SUPER+H / SUPER+;.
+-- Esc always leaves the hints submap, even if the shell is dead — that is
+-- the stuck-submap recovery path.
 --
 -- Chord alphabet is fixed: asdfghjkl (no x, no digits — those are verbs).
 -- Keys go to the plugin's IpcHandler target `window-hints` (documented extra

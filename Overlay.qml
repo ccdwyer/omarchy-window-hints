@@ -390,7 +390,7 @@ Item {
       color: "transparent"
       WlrLayershell.namespace: "window-hints"
       WlrLayershell.layer: WlrLayer.Overlay
-      WlrLayershell.keyboardFocus: root.inputPath === "overlay" ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+      WlrLayershell.keyboardFocus: (root.opened && root.inputPath === "overlay") ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
       exclusionMode: ExclusionMode.Ignore
 
       readonly property var screenLabels: root.labelsForScreen(modelData)

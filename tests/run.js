@@ -384,6 +384,12 @@ test("config: parseBind uses suggestedBind, not a hardcoded F", () => {
   same(Config.parseBind("SUPER+H"), { mods: "SUPER", key: "H" })
   same(Config.parseBind("SUPER + ;"), { mods: "SUPER", key: "semicolon" })
   same(Config.parseBind(""), { mods: "SUPER", key: "F" })
+  assert.strictEqual(Config.luaBind("SUPER+H"), "SUPER + H")
+  assert.strictEqual(Config.luaBind("SUPER+;"), "SUPER + semicolon")
+  assert.strictEqual(Config.luaBind(""), "SUPER + F")
+  assert.strictEqual(Config.keywordBind("SUPER+H"), "SUPER,H")
+  assert.strictEqual(Config.keywordBind("SUPER+;"), "SUPER,semicolon")
+  assert.strictEqual(Config.keywordBind("SUPER+F"), "SUPER,F")
 })
 
 test("config: parseInstall treats missing/false as not installed", () => {
@@ -399,6 +405,9 @@ test("actions: dispatch strings", () => {
   assert.strictEqual(Actions.moveCmd("0x1", 3), "movetoworkspacesilent 3,address:0x1")
   const plan = Actions.commit("focus", { address: "0x1" }, 0)
   assert.strictEqual(plan.kind, "focus")
+  same(Actions.dispatchArgv("focuswindow address:0x1"), ["hyprctl", "dispatch", "focuswindow", "address:0x1"])
+  same(Actions.dispatchArgv("submap reset"), ["hyprctl", "dispatch", "submap", "reset"])
+  same(Actions.dispatchArgv(""), [])
 })
 
 test("events: socket2 parse + unknown skipped", () => {

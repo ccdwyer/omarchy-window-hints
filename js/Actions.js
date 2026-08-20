@@ -39,6 +39,16 @@ function submapCmd(name) {
     return "submap " + String(name || "reset")
 }
 
+function dispatchArgv(request) {
+    var s = String(request || "").trim()
+    if (!s)
+        return []
+    var i = s.indexOf(" ")
+    if (i < 0)
+        return ["hyprctl", "dispatch", s]
+    return ["hyprctl", "dispatch", s.slice(0, i), s.slice(i + 1)]
+}
+
 function batch(cmds) {
     var parts = []
     for (var i = 0; i < (cmds || []).length; i++) {

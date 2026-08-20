@@ -22,11 +22,51 @@ have_hypr() {
   command -v "$HYPR" >/dev/null 2>&1
 }
 
-run_hypr() {
+try_hypr() {
   if ! have_hypr; then
-    err "hyprctl missing"
+    return 1
   fi
-  "$HYPR" "$@"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 1 "$HYPR" "$@"
+  else
+    "$HYPR" "$@"
+  fi
+}
+
+run_hypr() {
+  try_hypr "$@" || err "hyprctl failed"
+}
+
+format_lua_bind() {
+  spec=$(printf '%s' "$1" | tr -d '[:space:]')
+  case "$spec" in
+    *+*)
+      mods=${spec%+*}
+      key=${spec##*+}
+      [ -n "$mods" ] || mods=SUPER
+      [ -n "$key" ] || key=F
+      [ "$key" = ";" ] && key=semicolon
+      mods=$(printf '%s' "$mods" | sed 's/+/ + /g')
+      printf '%s' "$mods + $key"
+      ;;
+    *) printf '%s' "SUPER + F" ;;
+  esac
+}
+
+format_keyword_bind() {
+  spec=$(printf '%s' "$1" | tr -d '[:space:]')
+  case "$spec" in
+    *+*)
+      mods=${spec%+*}
+      key=${spec##*+}
+      [ -n "$mods" ] || mods=SUPER
+      [ -n "$key" ] || key=F
+      [ "$key" = ";" ] && key=semicolon
+      mods=$(printf '%s' "$mods" | sed 's/+/_/g')
+      printf '%s,%s' "$mods" "$key"
+      ;;
+    *) printf '%s' "SUPER,F" ;;
+  esac
 }
 
 cmd_ping() {
@@ -42,8 +82,10 @@ cmd_snapshot() {
 ALPHABET=asdfghjkl
 
 lua_script() {
+  bind=$(format_lua_bind "${1:-${HINTS_SUGGESTED_BIND:-SUPER+F}}")
   printf '%s\n' "-- Window Hints submap. Fixed alphabet ${ALPHABET}."
-  printf '%s\n' "hl.bind(\"SUPER + F\", hl.dsp.exec_cmd(\"omarchy-shell shell toggle ${PLUGIN_ID} '{}'\"))"
+  printf '%s\n' "-- Toggle bind is suggestedBind (default SUPER+F)."
+  printf '%s\n' "hl.bind(\"${bind}\", hl.dsp.exec_cmd(\"omarchy-shell shell toggle ${PLUGIN_ID} '{}'\"))"
   printf '%s\n' "hl.define_submap(\"hints\", function()"
   i=1
   len=${#ALPHABET}
@@ -69,7 +111,9 @@ lua_script() {
 }
 
 keyword_batch() {
-  parts="keyword submap hints"
+  kw=$(format_keyword_bind "${1:-${HINTS_SUGGESTED_BIND:-SUPER+F}}")
+  parts="keyword bind ${kw},exec,omarchy-shell shell toggle ${PLUGIN_ID} '{}'"
+  parts="$parts ; keyword submap hints"
   i=1
   len=${#ALPHABET}
   while [ "$i" -le "$len" ]; do
@@ -94,18 +138,19 @@ keyword_batch() {
 
 cmd_submap() {
   action=${1:-status}
+  bind=${2:-${HINTS_SUGGESTED_BIND:-SUPER+F}}
   case "$action" in
-    script) lua_script ;;
+    script) lua_script "$bind" ;;
     install)
-      script=$(lua_script | sed '/^--/d')
+      script=$(lua_script "$bind" | sed '/^--/d')
       eval_out=$(mktemp)
       eval_err=$(mktemp)
       kw_out=$(mktemp)
       kw_err=$(mktemp)
       trap 'rm -f "$eval_out" "$eval_err" "$kw_out" "$kw_err"' EXIT
-      if have_hypr && "$HYPR" eval "$script" >"$eval_out" 2>"$eval_err"; then
+      if have_hypr && try_hypr eval "$script" >"$eval_out" 2>"$eval_err"; then
         ok '{"ok":true,"installed":true,"via":"eval"}'
-      elif have_hypr && "$HYPR" --batch "$(keyword_batch)" >"$kw_out" 2>"$kw_err"; then
+      elif have_hypr && try_hypr --batch "$(keyword_batch "$bind")" >"$kw_out" 2>"$kw_err"; then
         ok '{"ok":true,"installed":true,"via":"keyword"}'
       else
         ok '{"ok":true,"installed":false,"via":"bindings.lua","error":"hyprctl eval and keyword batch failed; paste bindings.lua"}'
@@ -135,7 +180,7 @@ cmd_swap_probe() {
     return
   fi
   # Same dispatcher string QML uses. Dummy address: syntax accepted ⇒ capable.
-  help=$("$HYPR" dispatch swapwindow address:0x0 2>&1 || true)
+  help=$(try_hypr dispatch swapwindow address:0x0 2>&1 || true)
   case "$help" in
     *'l|r|u|d'*|*'l/r/u/d'*|[Ii]nvalid\ direction*)
       ok '{"ok":true,"capable":false,"reason":"directional-only"}'
@@ -188,7 +233,7 @@ cmd_binds_check() {
     key="semicolon"
   fi
   if have_hypr; then
-    raw=$("$HYPR" -j binds 2>/dev/null || printf '[]')
+    raw=$(try_hypr -j binds 2>/dev/null || printf '[]')
   else
     raw='[]'
   fi
@@ -236,7 +281,7 @@ shift
 case "$cmd" in
   ping) cmd_ping ;;
   snapshot) cmd_snapshot ;;
-  submap) cmd_submap "${1:-status}" ;;
+  submap) cmd_submap "${1:-status}" "${2:-}" ;;
   swap-probe) cmd_swap_probe ;;
   binds-check) cmd_binds_check "${1:-SUPER}" "${2:-F}" ;;
   dispatch) cmd_dispatch "${1:-}" "${2:-}" "${3:-1}" ;;

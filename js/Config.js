@@ -165,6 +165,26 @@ function parseBind(spec) {
     return { mods: mods, key: key }
 }
 
+// Hyprland lua: "SUPER + F". Generated install uses this, not a hardcoded Super+F.
+function luaBind(spec) {
+    var b = parseBind(spec)
+    var mods = String(b.mods || "SUPER").replace(/\+/g, " + ")
+    var key = b.key || "F"
+    if (key === ";")
+        key = "semicolon"
+    return mods + " + " + key
+}
+
+// hyprctl keyword bind MODS,KEY,exec,...
+function keywordBind(spec) {
+    var b = parseBind(spec)
+    var mods = String(b.mods || "SUPER").replace(/\+/g, "_")
+    var key = b.key || "F"
+    if (key === ";")
+        key = "semicolon"
+    return mods + "," + key
+}
+
 function parseInstall(text) {
     var raw = String(text || "").trim()
     if (!raw)
