@@ -170,6 +170,16 @@ function sortByMru(windows, mru) {
     return copy
 }
 
+function maxAddressable(k) {
+    var max = 0
+    for (var s = 0; s <= k; s++) {
+        var capn = s + (k - s) * k
+        if (capn > max)
+            max = capn
+    }
+    return max
+}
+
 function chordsNeeded(n, k) {
     if (n <= k)
         return { singles: n, prefixes: 0 }
@@ -239,8 +249,12 @@ function uniqueChords(map) {
 }
 
 function assignSession(windows, alphabet, mru, cap) {
-    alphabet = alphabet || DEFAULT_ALPHABET
+    alphabet = DEFAULT_ALPHABET
     cap = cap || DEFAULT_CAP
+    var k = alphabet.length
+    var chordCap = maxAddressable(k)
+    if (cap > chordCap)
+        cap = chordCap
     var ordered = sortByMru(windows || [], mru)
     var overflow = Math.max(0, ordered.length - cap)
     var hinted = ordered.slice(0, cap)
@@ -255,9 +269,17 @@ function assignSession(windows, alphabet, mru, cap) {
     }
 
     var fresh = allocateFresh(addrs, alphabet)
+    var kept = []
+    for (i = 0; i < hinted.length; i++) {
+        var ch = fresh[addrs[i]]
+        if (ch)
+            kept.push(hinted[i])
+        else
+            overflow += 1
+    }
     sessionChords = fresh
     sessionSetKey = key
-    return { chords: fresh, hinted: hinted, overflow: overflow, reused: false }
+    return { chords: fresh, hinted: kept, overflow: overflow, reused: false }
 }
 
 function freezeInvocation(assignment, visibleNow) {

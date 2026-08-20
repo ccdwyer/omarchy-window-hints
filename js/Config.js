@@ -5,8 +5,9 @@
 
 var VERSION = 1
 
+var ALPHABET = "asdfghjkl"
+
 var DEFAULTS = {
-    alphabet: "asdfghjkl",
     inset: 8,
     maxHints: 25,
     watchdogMs: 15000,
@@ -21,7 +22,6 @@ var DEFAULTS = {
     fadeMs: 80
 }
 
-var alphabet = DEFAULTS.alphabet
 var inset = DEFAULTS.inset
 var maxHints = DEFAULTS.maxHints
 var watchdogMs = DEFAULTS.watchdogMs
@@ -36,12 +36,12 @@ var fadeAfterMs = DEFAULTS.fadeAfterMs
 var fadeMs = DEFAULTS.fadeMs
 var revision = 0
 
-var SETTING_KEYS = ["alphabet", "inset", "maxHints", "watchdogMs", "armMs", "inputPath", "suggestedBind"]
+var SETTING_KEYS = ["inset", "maxHints", "watchdogMs", "armMs", "inputPath", "suggestedBind"]
 
 function snapshot() {
     return {
         version: VERSION,
-        alphabet: alphabet,
+        alphabet: ALPHABET,
         inset: inset,
         maxHints: maxHints,
         watchdogMs: watchdogMs,
@@ -56,24 +56,6 @@ function snapshot() {
         fadeMs: fadeMs,
         revision: revision
     }
-}
-
-function sanitizeAlphabet(value) {
-    var raw = String(value === undefined || value === null ? "" : value)
-    var seen = {}
-    var out = ""
-    for (var i = 0; i < raw.length; i++) {
-        var ch = raw.charAt(i).toLowerCase()
-        if (!/[a-z]/.test(ch))
-            continue
-        if (seen[ch])
-            continue
-        seen[ch] = true
-        out += ch
-    }
-    if (out.length < 2)
-        return DEFAULTS.alphabet
-    return out
 }
 
 function asInt(value, fallback, min, max) {
@@ -103,8 +85,6 @@ function apply(raw) {
     if (!data || typeof data !== "object")
         return false
 
-    if (data.alphabet !== undefined)
-        alphabet = sanitizeAlphabet(data.alphabet)
     if (data.inset !== undefined)
         inset = asInt(data.inset, DEFAULTS.inset, 0, 64)
     if (data.maxHints !== undefined)

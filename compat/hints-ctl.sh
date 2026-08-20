@@ -39,49 +39,22 @@ cmd_snapshot() {
   printf '{"ok":true,"clients":%s,"monitors":%s}\n' "$clients" "$monitors"
 }
 
-sanitize_alphabet() {
-  raw=$1
-  out=
-  i=1
-  len=${#raw}
-  while [ "$i" -le "$len" ]; do
-    ch=$(printf '%s' "$raw" | cut -c "$i" | tr 'A-Z' 'a-z')
-    case "$ch" in
-      [a-z])
-        case "$out" in
-          *"$ch"*) ;;
-          *) out=$out$ch ;;
-        esac
-        ;;
-    esac
-    i=$((i + 1))
-  done
-  if [ "${#out}" -lt 2 ]; then
-    printf '%s' "asdfghjkl"
-  else
-    printf '%s' "$out"
-  fi
-}
+ALPHABET=asdfghjkl
 
 lua_script() {
-  alphabet=$(sanitize_alphabet "${1:-asdfghjkl}")
-  printf '%s\n' "-- Window Hints submap. Generated from alphabet=${alphabet}."
+  printf '%s\n' "-- Window Hints submap. Fixed alphabet ${ALPHABET}."
   printf '%s\n' "hl.bind(\"SUPER + F\", hl.dsp.exec_cmd(\"omarchy-shell shell toggle ${PLUGIN_ID} '{}'\"))"
   printf '%s\n' "hl.define_submap(\"hints\", function()"
   i=1
-  len=${#alphabet}
-  has_x=0
+  len=${#ALPHABET}
   while [ "$i" -le "$len" ]; do
-    ch=$(printf '%s' "$alphabet" | cut -c "$i")
+    ch=$(printf '%s' "$ALPHABET" | cut -c "$i")
     up=$(printf '%s' "$ch" | tr 'a-z' 'A-Z')
     printf '%s\n' "    hl.bind(\"${ch}\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key ${ch}\"))"
     printf '%s\n' "    hl.bind(\"SHIFT + ${ch}\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key ${up}\"))"
-    [ "$ch" = "x" ] && has_x=1
     i=$((i + 1))
   done
-  if [ "$has_x" -eq 0 ]; then
-    printf '%s\n' "    hl.bind(\"x\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key x\"))"
-  fi
+  printf '%s\n' "    hl.bind(\"x\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key x\"))"
   n=1
   while [ "$n" -le 9 ]; do
     printf '%s\n' "    hl.bind(\"${n}\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key ${n}\"))"
@@ -95,17 +68,42 @@ lua_script() {
   printf '%s\n' "end)"
 }
 
+keyword_batch() {
+  parts="keyword submap hints"
+  i=1
+  len=${#ALPHABET}
+  while [ "$i" -le "$len" ]; do
+    ch=$(printf '%s' "$ALPHABET" | cut -c "$i")
+    up=$(printf '%s' "$ch" | tr 'a-z' 'A-Z')
+    parts="$parts ; keyword bind ,${ch},exec,omarchy-shell shell call ${PLUGIN_ID} key ${ch}"
+    parts="$parts ; keyword bind SHIFT,${ch},exec,omarchy-shell shell call ${PLUGIN_ID} key ${up}"
+    i=$((i + 1))
+  done
+  parts="$parts ; keyword bind ,x,exec,omarchy-shell shell call ${PLUGIN_ID} key x"
+  n=1
+  while [ "$n" -le 9 ]; do
+    parts="$parts ; keyword bind ,${n},exec,omarchy-shell shell call ${PLUGIN_ID} key ${n}"
+    n=$((n + 1))
+  done
+  parts="$parts ; keyword bind ,escape,exec,omarchy-shell shell call ${PLUGIN_ID} key escape"
+  parts="$parts ; keyword bind ,escape,submap,reset"
+  parts="$parts ; keyword bind ,catchall,exec,true"
+  parts="$parts ; keyword submap reset"
+  printf '%s' "$parts"
+}
+
 cmd_submap() {
   action=${1:-status}
-  alphabet=$(sanitize_alphabet "${2:-asdfghjkl}")
   case "$action" in
-    script) lua_script "$alphabet" ;;
+    script) lua_script ;;
     install)
-      script=$(lua_script "$alphabet" | sed '/^--/d')
+      script=$(lua_script | sed '/^--/d')
       if have_hypr && "$HYPR" eval "$script" >/tmp/hints-ctl-eval.out 2>/tmp/hints-ctl-eval.err; then
-        printf '{"ok":true,"installed":true,"via":"eval","alphabet":"%s"}\n' "$(json_escape "$alphabet")"
+        ok '{"ok":true,"installed":true,"via":"eval"}'
+      elif have_hypr && "$HYPR" --batch "$(keyword_batch)" >/tmp/hints-ctl-kw.out 2>/tmp/hints-ctl-kw.err; then
+        ok '{"ok":true,"installed":true,"via":"keyword"}'
       else
-        printf '{"ok":true,"installed":false,"via":"bindings.lua","alphabet":"%s","error":"hyprctl eval failed; paste bindings.lua"}\n' "$(json_escape "$alphabet")"
+        ok '{"ok":true,"installed":false,"via":"bindings.lua","error":"hyprctl eval and keyword batch failed; paste bindings.lua"}'
       fi
       ;;
     activate)
@@ -231,7 +229,7 @@ shift
 case "$cmd" in
   ping) cmd_ping ;;
   snapshot) cmd_snapshot ;;
-  submap) cmd_submap "${1:-status}" "${2:-asdfghjkl}" ;;
+  submap) cmd_submap "${1:-status}" ;;
   swap-probe) cmd_swap_probe ;;
   binds-check) cmd_binds_check "${1:-SUPER}" "${2:-F}" ;;
   dispatch) cmd_dispatch "${1:-}" "${2:-}" "${3:-1}" ;;

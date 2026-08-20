@@ -217,6 +217,65 @@ function fromToplevel(top) {
     }
 }
 
+function hasGeometry(client) {
+    if (!client || !client.size)
+        return false
+    var w = 0
+    var h = 0
+    if (Array.isArray(client.size) && client.size.length >= 2) {
+        w = Number(client.size[0]) || 0
+        h = Number(client.size[1]) || 0
+    }
+    return w > 0 || h > 0
+}
+
+function mergeToplevels(existing, tops) {
+    var byAddr = {}
+    var i
+    var list = existing || []
+    for (i = 0; i < list.length; i++) {
+        var addr = normalizeAddress(list[i].address)
+        if (addr)
+            byAddr[addr] = list[i]
+    }
+    var incoming = tops || []
+    for (i = 0; i < incoming.length; i++) {
+        var top = incoming[i]
+        if (!top)
+            continue
+        var a = normalizeAddress(top.address)
+        if (!a)
+            continue
+        var prev = byAddr[a]
+        if (!prev) {
+            if (hasGeometry(top))
+                byAddr[a] = top
+            continue
+        }
+        if (top.title)
+            prev.title = top.title
+        if (top.className)
+            prev.className = top.className
+        if (top.workspace)
+            prev.workspace = top.workspace
+        if (top.mapped !== undefined)
+            prev.mapped = top.mapped
+        if (hasGeometry(top)) {
+            prev.at = top.at
+            prev.size = top.size
+            if (top.monitor !== null && top.monitor !== undefined)
+                prev.monitor = top.monitor
+        }
+        byAddr[a] = prev
+    }
+    var out = []
+    for (var k in byAddr) {
+        if (byAddr.hasOwnProperty(k))
+            out.push(byAddr[k])
+    }
+    return out
+}
+
 function fromToplevels(model) {
     if (!model)
         return null

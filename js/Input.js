@@ -70,15 +70,6 @@ function handleKey(s, raw, labels, now, armMs) {
         return result
 
     if (isEscape(key)) {
-        if (s.state === "armed") {
-            s.state = "hinting"
-            s.prefix = ""
-            s.verb = "focus"
-            s.armedAddress = ""
-            s.armedUntil = 0
-            result.action = "abort-arm"
-            return result
-        }
         result.action = "dismiss"
         return result
     }

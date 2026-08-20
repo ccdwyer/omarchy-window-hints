@@ -101,7 +101,7 @@ fn print_usage() {
         "usage:
   hints-ctl ping
   hints-ctl snapshot
-  hints-ctl submap install|reset|activate|status|script [alphabet]
+  hints-ctl submap install|reset|activate|status|script
   hints-ctl swap-probe
   hints-ctl binds-check [MOD] [KEY]
   hints-ctl dispatch focus|close|swap|move ADDR [WORKSPACE]"
@@ -120,33 +120,26 @@ fn cmd_submap(args: &[String]) -> Result<String, String> {
     let action = args.first().map(String::as_str).unwrap_or("status");
     let id = plugin_id();
     match action {
-        "script" => {
-            let alphabet = args.get(1).map(String::as_str).unwrap_or("asdfghjkl");
-            Ok(submap::lua_script(&id, alphabet))
-        }
+        "script" => Ok(submap::lua_script(&id)),
         "install" => {
-            let alphabet = args.get(1).map(String::as_str).unwrap_or("asdfghjkl");
-            let script = submap::eval_install(&id, alphabet);
+            let script = submap::eval_install(&id);
             match hypr::hyprctl(&["eval", &script]) {
                 Ok(out) => Ok(ok_json(&[
                     ("installed", "true".into()),
                     ("via", json_escape("eval")),
-                    ("alphabet", json_escape(&submap::sanitize_alphabet(alphabet))),
                     ("output", json_escape(&out)),
                 ])),
                 Err(eval_err) => {
-                    let batch = submap::keyword_batch(&id, alphabet);
+                    let batch = submap::keyword_batch(&id);
                     match hypr::hyprctl(&["--batch", &batch]) {
                         Ok(out) => Ok(ok_json(&[
                             ("installed", "true".into()),
                             ("via", json_escape("keyword")),
-                            ("alphabet", json_escape(&submap::sanitize_alphabet(alphabet))),
                             ("output", json_escape(&out)),
                         ])),
                         Err(kw_err) => Ok(ok_json(&[
                             ("installed", "false".into()),
                             ("via", json_escape("bindings.lua")),
-                            ("alphabet", json_escape(&submap::sanitize_alphabet(alphabet))),
                             ("error", json_escape(&format!("{eval_err}; {kw_err}"))),
                         ])),
                     }

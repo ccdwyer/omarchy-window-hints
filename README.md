@@ -18,7 +18,7 @@ Then, on the machine, build the helper (optional — QML talks to `hyprctl` dire
 ~/.config/omarchy/plugins/io.github.chris.window-hints/build.sh
 ```
 
-Paste `bindings.lua` into `~/.config/hypr/bindings.lua`, or run `hints-ctl submap install [alphabet]` which generates binds for the **active** alphabet (tries `hyprctl eval`, then a keyword batch). Reload plugins if the shell was already running:
+Paste `bindings.lua` into `~/.config/hypr/bindings.lua`, or run `hints-ctl submap install` (tries `hyprctl eval`, then a `hyprctl --batch` keyword fallback). Reload plugins if the shell was already running:
 
 ```sh
 omarchy-shell shell rescanPlugins
@@ -32,7 +32,7 @@ omarchy-shell shell rescanPlugins
 | hint key, then `Shift+chord` | Swap with the focused window (same workspace only) |
 | hint key, then `x` then chord | Close — the target flashes danger for 250 ms; `Esc` aborts |
 | hint key, then `1`–`9` then chord | Move to workspace N (`movetoworkspacesilent`) |
-| `Esc` | Always dismiss; always resets the Hyprland submap |
+| `Esc` | Always dismiss (including while a close is armed); always resets the Hyprland submap |
 
 Suggested bind is **Super+F**. If Super+F is already taken, first summon says so and offers **Super+H** / **Super+;**. The plugin never writes your bind file.
 
@@ -60,7 +60,6 @@ Inline on the `shell.json` plugin entry. No config file of our own.
 ```json
 {
   "id": "io.github.chris.window-hints",
-  "alphabet": "asdfghjkl",
   "inset": 8,
   "maxHints": 25,
   "watchdogMs": 15000,
@@ -70,13 +69,13 @@ Inline on the `shell.json` plugin entry. No config file of our own.
 }
 ```
 
-`alphabet` is both the chord set and the keys installed into the hints submap (the helper regenerates binds when it changes). `inputPath: "overlay"` is an optional latency enhancement (exclusive overlay focus). Leave it at `"submap"` for the compositor-grabbed path.
+Chords use a **fixed** home-row alphabet `asdfghjkl` (v1.0). `x` and `1`–`9` are reserved verbs, not chords. `inputPath: "overlay"` is an optional latency enhancement (exclusive overlay focus). Leave it at `"submap"` for the compositor-grabbed path.
 
 ## Honest limitations
 
 - **Windows only.** Bar-widget hinting needs shell internals; not in 1.0. Other-workspace gutter (`Tab`) is v1.1.
 - **Swap is same-workspace only.** Cross-workspace swap is not a swap (it would take two `movetoworkspacesilent` and wreck both layouts). If this Hyprland's `swapwindow` is directional-only, the Shift+chord verb is greyed rather than surprising you.
-- **25 visible windows.** Beyond that, a "+N more" chip points at window-tree plugins this one does not replace.
+- **25 visible windows (or chord capacity, whichever is smaller).** Beyond that, a "+N more" chip; extra windows are not hinted.
 - **Label freeze.** A window that closes mid-hint loses its label; that chord is never reused. New windows opening mid-hint are ignored until the next summon.
 - **Keybinds are yours to add.** First summon shows the table and, if Super+F collides, the alternates. On Hyprland 0.55, `hyprctl keyword` may refuse to install the submap at runtime — paste `bindings.lua`.
 - **Helper binary.** `bin/hints-ctl` is built by `build.sh`. If it is missing, QML uses `compat/hints-ctl.sh` and raw `hyprctl`. Submap *definition* may need the Lua snippet; summon still activates the `hints` submap.

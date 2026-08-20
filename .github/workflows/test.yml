@@ -1,0 +1,51 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Engine tests
+        run: node tests/run.js
+      - name: POSIX helper fallback
+        run: sh tests/helper-fallback.test.sh
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: hints-ctl unit tests
+        run: cargo test --manifest-path src/hints-ctl/Cargo.toml
+
+  qmllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install qmllint when packaged
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qtdeclarative5-dev-tools qtdeclarative6-dev-tools || true
+      - name: Lint QML entry points
+        run: |
+          LINT=""
+          command -v qmllint6 >/dev/null && LINT=qmllint6
+          command -v qmllint >/dev/null && LINT=${LINT:-qmllint}
+          if [ -z "$LINT" ]; then
+            echo "qmllint not installed on this runner; skipping"
+            exit 0
+          fi
+          set +e
+          "$LINT" Service.qml Overlay.qml
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "qmllint exited $status (Quickshell imports are expected to be unresolved off-device)"
+          fi

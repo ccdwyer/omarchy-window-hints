@@ -24,7 +24,7 @@ Item {
   property var settings: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH") || ""
 
-  property string alphabet: Config.DEFAULTS.alphabet
+  readonly property string alphabet: Config.ALPHABET
   property int inset: Config.DEFAULTS.inset
   property int maxHints: Config.DEFAULTS.maxHints
   property int watchdogMs: Config.DEFAULTS.watchdogMs
@@ -55,6 +55,8 @@ Item {
   property bool submapInstalled: false
   property bool submapInstallTried: false
   property bool submapActivated: false
+  property bool installInFlight: false
+  property bool pendingActivate: false
   property string installedAlphabet: ""
   property string bindingsWarning: ""
   property string lastStatus: "starting"
@@ -77,7 +79,6 @@ Item {
     if (!obj || typeof obj !== "object")
       return
     Config.apply(obj)
-    root.alphabet = Config.alphabet
     root.inset = Config.inset
     root.maxHints = Config.maxHints
     root.watchdogMs = Config.watchdogMs
@@ -90,7 +91,6 @@ Item {
 
   function currentItemProps() {
     return {
-      alphabet: root.alphabet,
       inset: root.inset,
       maxHints: root.maxHints,
       watchdogMs: root.watchdogMs,
@@ -227,7 +227,7 @@ Item {
       payload = null
     }
     root.ingestHostSettings(payload)
-    if (root.alphabet !== root.installedAlphabet)
+    if (!root.submapInstalled && !root.installInFlight)
       root.installSubmap()
     if (root.hinting)
       return "ok"
@@ -397,17 +397,23 @@ Item {
   function activateSubmap() {
     if (root.inputPath === "overlay") {
       root.overlayExclusive = true
+      root.pendingActivate = false
       Session.setInputPath("overlay")
       Session.setSubmap(false)
+      return
+    }
+    if (root.installInFlight) {
+      root.pendingActivate = true
       return
     }
     root.overlayExclusive = false
     Session.setInputPath("submap")
     root.dispatchHypr(Actions.submapCmd("hints"))
     root.submapActivated = true
+    root.pendingActivate = false
     Session.setSubmap(true)
     if (!root.submapInstalled) {
-      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install) so the hints submap has keys. Stuck: hyprctl dispatch submap reset"
+      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Stuck: hyprctl dispatch submap reset"
       Session.setBindingsWarning(root.bindingsWarning)
     }
   }
@@ -456,7 +462,7 @@ Item {
       tops = null
     }
     if (tops && tops.length)
-      root.clients = tops
+      root.clients = Clients.mergeToplevels(root.clients, tops)
   }
 
   function onClientsJson(text) {
@@ -559,19 +565,24 @@ Item {
   }
 
   function installSubmap() {
-    var alpha = root.alphabet || Config.DEFAULTS.alphabet
-    root.enqueueWork([root.helperCommand(), "submap", "install", alpha], function (text) {
+    if (root.installInFlight)
+      return
+    root.installInFlight = true
+    root.enqueueWork([root.helperCommand(), "submap", "install"], function (text) {
+      root.installInFlight = false
       var result = Config.parseInstall(text)
-      root.submapInstalled = !!result.installed
       root.submapInstallTried = true
-      root.installedAlphabet = alpha
+      root.submapInstalled = !!result.installed
       if (root.submapInstalled) {
+        root.installedAlphabet = Config.ALPHABET
         root.bindingsWarning = ""
       } else {
-        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install " + alpha + "). Submap is still activated; Esc recovery: hyprctl dispatch submap reset"
+        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Stuck: hyprctl dispatch submap reset"
       }
       Session.setSubmapInstalled(root.submapInstalled)
       Session.setBindingsWarning(root.bindingsWarning)
+      if (root.pendingActivate || root.hinting)
+        root.activateSubmap()
       root.publish()
     })
   }
@@ -670,10 +681,7 @@ Item {
     running: true
     onTriggered: {
       root.collectFromModule()
-      if (!root.hyprlandEventsLive)
-        root.requestSnapshot("poll")
-      else if (root.hinting)
-        root.syncLiveLabels()
+      root.requestSnapshot(root.hyprlandEventsLive ? "poll-geo" : "poll")
     }
   }
 
@@ -715,28 +723,38 @@ Item {
     }
   }
 
+  function key(k) { return root.onKey(k) }
+  function summon() { return root.summonOverlay("{}") }
+  function toggle() { return root.toggleHint("{}") }
+  function hide() { return root.hideOverlay() }
+  function dismiss() { return root.endHint("dismiss") }
+  function end(reason) { return root.endHint(reason || "end") }
+  function ping() { return "ok" }
+  function status(arg) { return root.statusJson() }
+  function begin(payload) { return root.beginHint(payload) }
+  function markFirstRun() {
+    root.firstRunShown = true
+    Session.setFirstRun(false, root.bindCollision, root.suggestedBind, Config.alternateBinds)
+    root.publish()
+    return "ok"
+  }
+  function open(payloadJson) { return root.beginHint(payloadJson || "{}") }
+  function close() { return root.endHint("close") }
+
   IpcHandler {
     target: "io.github.chris.window-hints"
 
-    function key(k: string): string { return root.onKey(k) }
-    function summon(): string { return root.summonOverlay("{}") }
-    function toggle(): string { return root.toggleHint("{}") }
-    function hide(): string { return root.hideOverlay() }
-    function dismiss(): string { return root.endHint("dismiss") }
-    function end(reason: string): string { return root.endHint(reason || "end") }
-    function ping(): string { return "ok" }
-    function status(arg: string): string { return root.statusJson() }
-    function begin(payload: string): string { return root.beginHint(payload) }
-    function markFirstRun(): string {
-      root.firstRunShown = true
-      Session.setFirstRun(false, root.bindCollision, root.suggestedBind, Config.alternateBinds)
-      root.publish()
-      return "ok"
-    }
+    function key(k: string): string { return root.key(k) }
+    function summon(): string { return root.summon() }
+    function toggle(): string { return root.toggle() }
+    function hide(): string { return root.hide() }
+    function dismiss(): string { return root.dismiss() }
+    function end(reason: string): string { return root.end(reason) }
+    function ping(): string { return root.ping() }
+    function status(arg: string): string { return root.status(arg) }
+    function begin(payload: string): string { return root.begin(payload) }
+    function markFirstRun(): string { return root.markFirstRun() }
   }
-
-  function open(payloadJson) { return root.beginHint(payloadJson || "{}") }
-  function close() { return root.endHint("close") }
 
   Component.onCompleted: {
     Config.reset()

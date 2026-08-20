@@ -15,11 +15,12 @@ printf '%s\n' "$script" | grep -q 'submap("reset")' || { echo "script missing re
 printf '%s\n' "$script" | grep -q 'catchall' || { echo "script missing catchall"; exit 1; }
 printf '%s\n' "$script" | grep -q 'key a' || { echo "default script missing key a"; exit 1; }
 
-custom=$("$SH" submap script qwer)
-printf '%s\n' "$custom" | grep -q 'key q' || { echo "custom alphabet missing q: $custom"; exit 1; }
-printf '%s\n' "$custom" | grep -q 'key w' || { echo "custom alphabet missing w"; exit 1; }
-printf '%s\n' "$custom" | grep -q 'SHIFT + q' || { echo "custom alphabet missing SHIFT+q"; exit 1; }
-printf '%s\n' "$custom" | grep -q 'hl.bind("a"' && { echo "custom alphabet should not bind leftover a: $custom"; exit 1; }
+ignored=$("$SH" submap script qwer)
+printf '%s\n' "$ignored" | grep -q 'hl.bind("a"' || { echo "fixed alphabet missing a"; exit 1; }
+printf '%s\n' "$ignored" | grep -q 'hl.bind("q"' && { echo "v1.0 must ignore custom alphabet: $ignored"; exit 1; }
+printf '%s\n' "$ignored" | grep -q 'key x' || { echo "close verb x missing"; exit 1; }
+grep -q 'keyword_batch' "$SH" || { echo "POSIX helper missing keyword_batch"; exit 1; }
+grep -q -- '--batch' "$SH" || { echo "POSIX helper install missing --batch fallback"; exit 1; }
 
 if HINTS_HYPRCTL=/no/such/hyprctl "$SH" snapshot >/tmp/hints-ctl-snap.out 2>/tmp/hints-ctl-snap.err; then
   echo "snapshot should fail without hyprctl"

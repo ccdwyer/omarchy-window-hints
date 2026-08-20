@@ -137,6 +137,15 @@ Item {
       root.opened = true
   }
 
+  function key(k) { return root.callService("key", k) }
+  function ping() { return "ok" }
+  function status(arg) { return root.callService("status", arg === undefined ? "{}" : arg) }
+  function begin(payload) { return root.callService("begin", payload || "{}") }
+  function summon() { root.open("{}"); return "ok" }
+  function hide() { return root.close() }
+  function dismiss() { return root.close() }
+  function end(reason) { return root.close() }
+
   function open(payloadJson) {
     root.opened = true
     var snap = Session.snapshot()

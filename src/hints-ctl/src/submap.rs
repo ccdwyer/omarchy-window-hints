@@ -1,41 +1,20 @@
-const DEFAULT_ALPHABET: &str = "asdfghjkl";
+/// Fixed v1.0 home-row alphabet. Excludes reserved verb keys: `x` (close),
+/// digits (workspace move), and is prefix-free for one- and two-key chords.
+pub const ALPHABET: &str = "asdfghjkl";
 
-pub fn sanitize_alphabet(raw: &str) -> String {
-    let mut out = String::new();
-    let mut seen = [false; 26];
-    for c in raw.chars() {
-        let c = c.to_ascii_lowercase();
-        if c.is_ascii_lowercase() {
-            let i = (c as u8 - b'a') as usize;
-            if !seen[i] {
-                seen[i] = true;
-                out.push(c);
-            }
-        }
-    }
-    if out.len() < 2 {
-        DEFAULT_ALPHABET.into()
-    } else {
-        out
-    }
-}
-
-pub fn lua_script(plugin_id: &str, alphabet: &str) -> String {
-    let alphabet = sanitize_alphabet(alphabet);
+pub fn lua_script(plugin_id: &str) -> String {
     let mut body = String::new();
-    body.push_str("-- Window Hints submap. Generated from the active alphabet.\n");
+    body.push_str("-- Window Hints submap. Fixed alphabet asdfghjkl (v1.0).\n");
     body.push_str("hl.bind(\"SUPER + F\", hl.dsp.exec_cmd(\"omarchy-shell shell toggle ");
     body.push_str(plugin_id);
     body.push_str(" '{}'\"))\n");
     body.push_str("hl.define_submap(\"hints\", function()\n");
-    for ch in alphabet.chars() {
+    for ch in ALPHABET.chars() {
         body.push_str(&bind_line(plugin_id, &ch.to_string(), &ch.to_string(), 4));
         let up = ch.to_uppercase().to_string();
         body.push_str(&bind_line(plugin_id, &format!("SHIFT + {ch}"), &up, 4));
     }
-    if !alphabet.contains('x') {
-        body.push_str(&bind_line(plugin_id, "x", "x", 4));
-    }
+    body.push_str(&bind_line(plugin_id, "x", "x", 4));
     for d in 1..=9 {
         body.push_str(&bind_line(plugin_id, &d.to_string(), &d.to_string(), 4));
     }
@@ -57,19 +36,18 @@ fn bind_line(plugin_id: &str, keys: &str, payload: &str, indent: usize) -> Strin
     )
 }
 
-pub fn eval_install(plugin_id: &str, alphabet: &str) -> String {
-    lua_script(plugin_id, alphabet)
+pub fn eval_install(plugin_id: &str) -> String {
+    lua_script(plugin_id)
         .lines()
         .filter(|l| !l.trim_start().starts_with("--") && !l.trim().is_empty())
         .collect::<Vec<_>>()
         .join(" ")
 }
 
-pub fn keyword_batch(plugin_id: &str, alphabet: &str) -> String {
-    let alphabet = sanitize_alphabet(alphabet);
+pub fn keyword_batch(plugin_id: &str) -> String {
     let mut parts: Vec<String> = Vec::new();
     parts.push("keyword submap hints".into());
-    for ch in alphabet.chars() {
+    for ch in ALPHABET.chars() {
         parts.push(format!(
             "keyword bind ,{ch},exec,omarchy-shell shell call {plugin_id} key {ch}"
         ));
@@ -78,11 +56,9 @@ pub fn keyword_batch(plugin_id: &str, alphabet: &str) -> String {
             "keyword bind SHIFT,{ch},exec,omarchy-shell shell call {plugin_id} key {up}"
         ));
     }
-    if !alphabet.contains('x') {
-        parts.push(format!(
-            "keyword bind ,x,exec,omarchy-shell shell call {plugin_id} key x"
-        ));
-    }
+    parts.push(format!(
+        "keyword bind ,x,exec,omarchy-shell shell call {plugin_id} key x"
+    ));
     for d in 1..=9 {
         parts.push(format!(
             "keyword bind ,{d},exec,omarchy-shell shell call {plugin_id} key {d}"
@@ -103,7 +79,7 @@ mod tests {
 
     #[test]
     fn lua_contains_escape_reset() {
-        let s = lua_script("io.github.chris.window-hints", "asdfghjkl");
+        let s = lua_script("io.github.chris.window-hints");
         assert!(s.contains("hl.define_submap(\"hints\""));
         assert!(s.contains("hl.dsp.submap(\"reset\")"));
         assert!(s.contains("catchall"));
@@ -112,33 +88,25 @@ mod tests {
         assert!(s.contains("key A"));
         assert!(s.contains("key 3"));
         assert!(s.contains("key x"));
+        assert!(!ALPHABET.contains('x'));
+        assert!(!ALPHABET.chars().any(|c| c.is_ascii_digit()));
     }
 
     #[test]
-    fn lua_uses_active_alphabet() {
-        let s = lua_script("io.github.chris.window-hints", "qwer");
-        assert!(s.contains("key q"));
-        assert!(s.contains("key w"));
-        assert!(s.contains("SHIFT + q"));
-        assert!(!s.contains("key a)"));
-        assert!(s.contains("key x"));
+    fn lua_ignores_custom_alphabet_arg_is_fixed() {
+        let s = lua_script("io.github.chris.window-hints");
+        assert!(s.contains("hl.bind(\"a\""));
+        assert!(s.contains("hl.bind(\"l\""));
+        assert!(!s.contains("hl.bind(\"q\""));
     }
 
     #[test]
     fn keyword_batch_resets() {
-        let s = keyword_batch("io.github.chris.window-hints", "asdfghjkl");
+        let s = keyword_batch("io.github.chris.window-hints");
         assert!(s.contains("submap reset"));
         assert!(s.contains("submap hints"));
         assert!(s.contains("key escape"));
-    }
-
-    #[test]
-    fn keyword_batch_custom_alphabet() {
-        let s = keyword_batch("io.github.chris.window-hints", "aoeu");
         assert!(s.contains(",a,exec,"));
-        assert!(s.contains(",o,exec,"));
-        assert!(s.contains(",e,exec,"));
-        assert!(s.contains(",u,exec,"));
-        assert!(!s.contains(",s,exec,"));
+        assert!(s.contains(",x,exec,"));
     }
 }

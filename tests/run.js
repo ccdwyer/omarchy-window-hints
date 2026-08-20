@@ -310,7 +310,7 @@ test("input: chord focuses, shift swaps, x arms close, digit moves", () => {
   assert.strictEqual(r.action, "arm")
   assert.strictEqual(s.state, "armed")
   r = Input.handleKey(s, "escape", labels, 1100, 250)
-  assert.strictEqual(r.action, "abort-arm")
+  assert.strictEqual(r.action, "dismiss")
 
   s = Input.begin(Input.create())
   r = Input.handleKey(s, "3", labels, 0, 250)
@@ -361,7 +361,6 @@ test("swap probe parser: directional vs address dispatch", () => {
 
 test("config: injected settings beat Item defaults", () => {
   const defaults = {
-    alphabet: "asdfghjkl",
     inset: 8,
     maxHints: 25,
     watchdogMs: 15000,
@@ -369,15 +368,16 @@ test("config: injected settings beat Item defaults", () => {
     inputPath: "submap",
     suggestedBind: "SUPER+F"
   }
-  const fromDefaults = Config.resolveSettings(defaults, { alphabet: "qwer", inset: 12 }, null)
-  assert.strictEqual(fromDefaults.alphabet, "qwer")
+  const fromDefaults = Config.resolveSettings(defaults, { inset: 12 }, null)
   assert.strictEqual(fromDefaults.inset, 12)
   assert.strictEqual(fromDefaults.maxHints, undefined)
-  const hostBound = Config.resolveSettings(Object.assign({}, defaults, { alphabet: "aoeu" }), null, null)
-  assert.strictEqual(hostBound.alphabet, "aoeu")
-  const settingsWin = Config.resolveSettings(Object.assign({}, defaults, { alphabet: "aoeu" }), { alphabet: "qwer" }, { armMs: 400 })
-  assert.strictEqual(settingsWin.alphabet, "qwer")
+  const hostBound = Config.resolveSettings(Object.assign({}, defaults, { inset: 20 }), null, null)
+  assert.strictEqual(hostBound.inset, 20)
+  const settingsWin = Config.resolveSettings(Object.assign({}, defaults, { inset: 20 }), { inset: 12 }, { armMs: 400 })
+  assert.strictEqual(settingsWin.inset, 12)
   assert.strictEqual(settingsWin.armMs, 400)
+  assert.strictEqual(Config.ALPHABET, "asdfghjkl")
+  assert.ok(Config.ALPHABET.indexOf("x") < 0)
 })
 
 test("config: parseBind uses suggestedBind, not a hardcoded F", () => {
@@ -410,13 +410,47 @@ test("events: socket2 parse + unknown skipped", () => {
   assert.ok(unk.length >= 1)
 })
 
-test("config: inline settings only, bad alphabet falls back", () => {
-  Config.apply({ alphabet: "aa11sdf", inset: 12, inputPath: "overlay", maxHints: 99 })
+test("config: inline settings ignore alphabet; fixed home-row", () => {
+  Config.apply({ alphabet: "asx", inset: 12, inputPath: "overlay", maxHints: 99 })
   const snap = Config.snapshot()
-  assert.strictEqual(snap.alphabet, "asdf")
+  assert.strictEqual(snap.alphabet, "asdfghjkl")
   assert.strictEqual(snap.inset, 12)
   assert.strictEqual(snap.inputPath, "overlay")
   assert.strictEqual(snap.maxHints, 25)
+})
+
+test("allocator: extra windows become overflow, never empty chords", () => {
+  HintEngine.resetSession()
+  const assignment = HintEngine.assignSession(manyWindows(90), "as", [], 100)
+  const chords = Object.values(assignment.chords)
+  assert.ok(chords.length > 0)
+  chords.forEach((c) => assert.ok(c && c.length >= 1))
+  assert.ok(assignment.overflow > 0)
+  assignment.hinted.forEach((w) => {
+    assert.ok(assignment.chords[HintEngine.normalizeAddress(w.address)])
+  })
+})
+
+test("clients: mergeToplevels does not clobber real geometry with zeros", () => {
+  const existing = [{
+    address: "0xaaa1",
+    at: [40, 80],
+    size: [800, 600],
+    title: "old",
+    monitor: 0
+  }]
+  const tops = [{
+    address: "0xaaa1",
+    at: [0, 0],
+    size: [0, 0],
+    title: "new-title",
+    monitor: 0
+  }]
+  const merged = Clients.mergeToplevels(existing, tops)
+  assert.strictEqual(merged.length, 1)
+  assert.strictEqual(merged[0].title, "new-title")
+  same(merged[0].at, [40, 80])
+  same(merged[0].size, [800, 600])
 })
 
 test("session: shared snapshot mutates", () => {
