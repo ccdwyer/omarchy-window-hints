@@ -84,14 +84,16 @@ pub fn hyprctl(args: &[&str]) -> Result<String, String> {
     Ok(out.stdout)
 }
 
+pub fn submap_lua(name: &str) -> String {
+    format!("hl.dsp.submap(\"{name}\")")
+}
+
+pub fn dispatch_lua(expr: &str) -> Result<String, String> {
+    hyprctl(&["dispatch", expr])
+}
+
 pub fn dispatch_submap(name: &str) -> Result<String, String> {
-    match hyprctl(&["dispatch", "submap", name]) {
-        Ok(out) => Ok(out),
-        Err(_) => {
-            let expr = format!("hl.dispatch(hl.dsp.submap(\"{name}\"))");
-            hyprctl(&["eval", &expr])
-        }
-    }
+    dispatch_lua(&submap_lua(name))
 }
 
 #[cfg(test)]
@@ -107,5 +109,11 @@ mod tests {
     #[test]
     fn timeout_constant_matches_qml() {
         assert_eq!(HYPRCTL_TIMEOUT_MS, 800);
+    }
+
+    #[test]
+    fn submap_lua_is_single_dispatch_expr() {
+        assert_eq!(submap_lua("reset"), r#"hl.dsp.submap("reset")"#);
+        assert_eq!(submap_lua("hints"), r#"hl.dsp.submap("hints")"#);
     }
 }

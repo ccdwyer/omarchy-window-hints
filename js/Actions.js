@@ -10,21 +10,21 @@ function addr(address) {
 }
 
 function focusCmd(address) {
-    return "focuswindow address:" + addr(address)
+    return "hl.dsp.focus({ window = \"address:" + addr(address) + "\" })"
 }
 
 function closeCmd(address) {
-    return "closewindow address:" + addr(address)
+    return "hl.dsp.window.close({ window = \"address:" + addr(address) + "\" })"
 }
 
 function moveCmd(address, workspace) {
-    return "movetoworkspacesilent " + String(workspace) + ",address:" + addr(address)
+    return "hl.dsp.window.move({ workspace = \"" + String(workspace) + "\", follow = false, window = \"address:" + addr(address) + "\" })"
 }
 
-// Same dispatcher string the swap probe exercises. Service only
+// Same Lua dispatcher the swap probe exercises. Service only
 // commits this when swapCapable is true (address targeting confirmed).
 function swapCmd(address) {
-    return "swapwindow address:" + addr(address)
+    return "hl.dsp.window.swap({ target = \"address:" + addr(address) + "\" })"
 }
 
 function swapProbeCmd() {
@@ -32,21 +32,20 @@ function swapProbeCmd() {
 }
 
 function swapProbeArgv() {
-    return ["swapwindow", "address:0x0"]
+    return dispatchArgv(swapProbeCmd())
 }
 
 function submapCmd(name) {
-    return "submap " + String(name || "reset")
+    return "hl.dsp.submap(\"" + String(name || "reset") + "\")"
 }
 
+// Hyprland 0.56: `hyprctl dispatch` takes one Lua expression argv.
+// Splitting dispatcher/arg concatenates into invalid Lua (exit 7).
 function dispatchArgv(request) {
     var s = String(request || "").trim()
     if (!s)
         return []
-    var i = s.indexOf(" ")
-    if (i < 0)
-        return ["hyprctl", "dispatch", s]
-    return ["hyprctl", "dispatch", s.slice(0, i), s.slice(i + 1)]
+    return ["hyprctl", "dispatch", s]
 }
 
 function batch(cmds) {

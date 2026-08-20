@@ -159,11 +159,11 @@ cmd_submap() {
       trap - EXIT
       ;;
     activate)
-      run_hypr dispatch submap hints >/dev/null || err "submap activate failed"
+      run_hypr dispatch 'hl.dsp.submap("hints")' >/dev/null || err "submap activate failed"
       ok '{"ok":true,"submap":"hints"}'
       ;;
     reset)
-      run_hypr dispatch submap reset >/dev/null || err "submap reset failed"
+      run_hypr dispatch 'hl.dsp.submap("reset")' >/dev/null || err "submap reset failed"
       ok '{"ok":true,"submap":"reset"}'
       ;;
     status)
@@ -179,13 +179,13 @@ cmd_swap_probe() {
     ok '{"ok":true,"capable":false,"reason":"no-hyprctl"}'
     return
   fi
-  # Same dispatcher string QML uses. Dummy address: syntax accepted ⇒ capable.
-  help=$(try_hypr dispatch swapwindow address:0x0 2>&1 || true)
+  # Same Lua table QML uses. Dummy address accepted ⇒ capable.
+  help=$(try_hypr dispatch 'hl.dsp.window.swap({ target = "address:0x0" })' 2>&1 || true)
   case "$help" in
     *'l|r|u|d'*|*'l/r/u/d'*|[Ii]nvalid\ direction*)
       ok '{"ok":true,"capable":false,"reason":"directional-only"}'
       ;;
-    *[Ii]nvalid\ window*|[Ww]indow\ not\ found*|*"couldn't find"*|*"no such window"*|*"unknown window"*)
+    *[Ii]nvalid\ window*|*[Ww]indow\ not\ found*|*"couldn't find"*|*"could not find"*|*"no such window"*|*"unknown window"*)
       ok '{"ok":true,"capable":true,"reason":"dispatch-accepted-address"}'
       ;;
     *address:*)
@@ -273,13 +273,13 @@ cmd_dispatch() {
     *) addr="0x$addr" ;;
   esac
   case "$verb" in
-    focus) req="focuswindow address:$addr" ;;
-    close) req="closewindow address:$addr" ;;
-    swap) req="swapwindow address:$addr" ;;
-    move) req="movetoworkspacesilent $ws,address:$addr" ;;
+    focus) req="hl.dsp.focus({ window = \"address:$addr\" })" ;;
+    close) req="hl.dsp.window.close({ window = \"address:$addr\" })" ;;
+    swap) req="hl.dsp.window.swap({ target = \"address:$addr\" })" ;;
+    move) req="hl.dsp.window.move({ workspace = \"$ws\", follow = false, window = \"address:$addr\" })" ;;
     *) err "unknown dispatch verb: $verb" ;;
   esac
-  out=$(run_hypr dispatch $req) || err "dispatch failed"
+  out=$(run_hypr dispatch "$req") || err "dispatch failed"
   printf '{"ok":true,"dispatched":"%s","output":"%s"}\n' \
     "$(json_escape "$req")" "$(json_escape "$out")"
 }

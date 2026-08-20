@@ -5,9 +5,9 @@ pub struct Probe {
     pub reason: String,
 }
 
-/// `hyprctl dispatch <dispatcher> <argument>` — never a single combined token.
-pub const SWAP_PROBE_DISPATCHER: &str = "swapwindow";
-pub const SWAP_PROBE_ARG: &str = "address:0x0";
+/// Hyprland 0.56: `hyprctl dispatch` takes one Lua expression argv.
+/// Classic `swapwindow address:0x0` is a Lua syntax error (exit 7).
+pub const SWAP_PROBE_LUA: &str = r#"hl.dsp.window.swap({ target = "address:0x0" })"#;
 
 pub fn parse_dispatch_result(text: &str) -> Probe {
     let lower = text.to_lowercase();
@@ -45,7 +45,7 @@ pub fn parse_dispatch_result(text: &str) -> Probe {
 }
 
 pub fn probe() -> Probe {
-    match hypr::hyprctl_raw(&["dispatch", SWAP_PROBE_DISPATCHER, SWAP_PROBE_ARG]) {
+    match hypr::hyprctl_raw(&["dispatch", SWAP_PROBE_LUA]) {
         Ok(out) => {
             let combined = format!("{} {}", out.stdout, out.stderr);
             parse_dispatch_result(&combined)
@@ -77,14 +77,19 @@ mod tests {
         assert_eq!(p.reason, "dispatch-accepted-address");
         let p2 = parse_dispatch_result("Window not found");
         assert!(p2.capable);
+        let p3 = parse_dispatch_result("target window not found");
+        assert!(p3.capable);
+        assert_eq!(p3.reason, "dispatch-accepted-address");
     }
 
     #[test]
-    fn probe_argv_is_dispatcher_then_argument() {
-        assert_eq!(SWAP_PROBE_DISPATCHER, "swapwindow");
-        assert_eq!(SWAP_PROBE_ARG, "address:0x0");
-        assert!(!SWAP_PROBE_DISPATCHER.contains(' '));
-        assert!(SWAP_PROBE_ARG.starts_with("address:"));
+    fn probe_argv_is_single_lua_expression() {
+        assert_eq!(
+            SWAP_PROBE_LUA,
+            r#"hl.dsp.window.swap({ target = "address:0x0" })"#
+        );
+        assert!(SWAP_PROBE_LUA.starts_with("hl.dsp.window.swap("));
+        assert!(!SWAP_PROBE_LUA.starts_with("swapwindow"));
     }
 
     #[test]

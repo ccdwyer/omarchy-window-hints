@@ -198,28 +198,30 @@ fn cmd_binds_check(args: &[String]) -> Result<String, String> {
     ))
 }
 
+fn dispatch_lua_expr(verb: &str, addr: &str, workspace: Option<&str>) -> Result<String, String> {
+    let addr = binds::normalize_address(addr);
+    match verb {
+        "focus" => Ok(format!(r#"hl.dsp.focus({{ window = "address:{addr}" }})"#)),
+        "close" => Ok(format!(r#"hl.dsp.window.close({{ window = "address:{addr}" }})"#)),
+        "swap" => Ok(format!(r#"hl.dsp.window.swap({{ target = "address:{addr}" }})"#)),
+        "move" => {
+            let ws = workspace.unwrap_or("1");
+            Ok(format!(
+                r#"hl.dsp.window.move({{ workspace = "{ws}", follow = false, window = "address:{addr}" }})"#
+            ))
+        }
+        other => Err(format!("unknown dispatch verb: {other}")),
+    }
+}
+
 fn cmd_dispatch(args: &[String]) -> Result<String, String> {
     if args.len() < 2 {
         return Err("dispatch needs VERB ADDRESS".into());
     }
-    let verb = args[0].as_str();
-    let addr = binds::normalize_address(&args[1]);
-    let (dispatcher, argument) = match verb {
-        "focus" => ("focuswindow".to_string(), format!("address:{addr}")),
-        "close" => ("closewindow".to_string(), format!("address:{addr}")),
-        "swap" => ("swapwindow".to_string(), format!("address:{addr}")),
-        "move" => {
-            let ws = args.get(2).map(String::as_str).unwrap_or("1");
-            (
-                "movetoworkspacesilent".to_string(),
-                format!("{ws},address:{addr}"),
-            )
-        }
-        other => return Err(format!("unknown dispatch verb: {other}")),
-    };
-    let out = hypr::hyprctl(&["dispatch", &dispatcher, &argument])?;
+    let expr = dispatch_lua_expr(args[0].as_str(), &args[1], args.get(2).map(String::as_str))?;
+    let out = hypr::dispatch_lua(&expr)?;
     Ok(ok_json(&[
-        ("dispatched", json_escape(&format!("{dispatcher} {argument}"))),
+        ("dispatched", json_escape(&expr)),
         ("output", json_escape(&out)),
     ]))
 }
@@ -238,5 +240,26 @@ mod tests {
         let s = err_json("nope");
         assert!(s.contains("\"ok\":false"));
         assert!(s.contains("nope"));
+    }
+
+    #[test]
+    fn dispatch_lua_expr_is_single_table() {
+        assert_eq!(
+            dispatch_lua_expr("focus", "AAA", None).unwrap(),
+            r#"hl.dsp.focus({ window = "address:0xaaa" })"#
+        );
+        assert_eq!(
+            dispatch_lua_expr("close", "0x1", None).unwrap(),
+            r#"hl.dsp.window.close({ window = "address:0x1" })"#
+        );
+        assert_eq!(
+            dispatch_lua_expr("swap", "0x1", None).unwrap(),
+            r#"hl.dsp.window.swap({ target = "address:0x1" })"#
+        );
+        assert_eq!(
+            dispatch_lua_expr("move", "0x1", Some("3")).unwrap(),
+            r#"hl.dsp.window.move({ workspace = "3", follow = false, window = "address:0x1" })"#
+        );
+        assert!(dispatch_lua_expr("explode", "0x1", None).is_err());
     }
 }

@@ -61,12 +61,16 @@ fi
 grep -q '"ok":false' "$snap_out" || { echo "snapshot error json missing"; rm -f "$snap_out" "$snap_err"; exit 1; }
 rm -f "$snap_out" "$snap_err"
 
-install=$("$SH" submap install)
+install=$(HINTS_HYPRCTL=/no/such/hyprctl "$SH" submap install)
 printf '%s\n' "$install" | grep -q '"installed":false' || { echo "install should report installed:false without hypr: $install"; exit 1; }
 
-swap=$("$SH" swap-probe)
+swap=$(HINTS_HYPRCTL=/no/such/hyprctl "$SH" swap-probe)
 printf '%s\n' "$swap" | grep -q '"capable":false' || { echo "swap-probe should not guess capable: $swap"; exit 1; }
 printf '%s\n' "$swap" | grep -q '0.55' && { echo "swap-probe still uses version heuristic: $swap"; exit 1; }
+grep -q "hyprctl dispatch submap reset" "$SVC" && { echo "Service still documents classic submap reset dispatch"; exit 1; }
+grep -q 'hl.dsp.submap' "$SVC" || { echo "Service recovery must use Lua submap dispatch"; exit 1; }
+grep -q 'dispatch swapwindow' "$SH" && { echo "POSIX helper still probes classic swapwindow"; exit 1; }
+grep -q 'hl.dsp.window.swap' "$SH" || { echo "POSIX helper swap-probe must dispatch Lua table"; exit 1; }
 
 mock=$(mktemp)
 cat > "$mock" <<'EOF'
@@ -93,4 +97,49 @@ col=$(HINTS_HYPRCTL="$mock" "$SH" binds-check SUPER F)
 printf '%s\n' "$col" | grep -q '"collision":false' || { echo "unrelated Super+Q must not collide Super+F: $col"; exit 1; }
 
 rm -f "$mock"
+
+mock=$(mktemp)
+log=$(mktemp)
+cat > "$mock" <<'EOF'
+#!/bin/sh
+: > "$HINTS_HYPR_LOG"
+i=1
+for a in "$@"; do
+  printf 'arg%d=%s\n' "$i" "$a" >> "$HINTS_HYPR_LOG"
+  i=$((i + 1))
+done
+if [ "$1" = "dispatch" ]; then
+  printf '%s\n' 'target window not found' >&2
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$mock"
+HINTS_HYPR_LOG="$log"
+export HINTS_HYPR_LOG
+swap=$(HINTS_HYPRCTL="$mock" "$SH" swap-probe)
+printf '%s\n' "$swap" | grep -q '"capable":true' || { echo "lua swap-probe should be capable: $swap"; rm -f "$mock" "$log"; exit 1; }
+grep -q 'hl.dsp.window.swap' "$log" || { echo "swap-probe must dispatch lua table: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+grep -q '^arg3=' "$log" && { echo "swap-probe lua must be a single argv: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+
+HINTS_HYPRCTL="$mock" "$SH" dispatch focus 0xaaa >/dev/null 2>&1
+grep -q 'hl.dsp.focus' "$log" || { echo "dispatch focus must use lua: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+grep -q '^arg3=' "$log" && { echo "dispatch must not split lua: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+
+HINTS_HYPRCTL="$mock" "$SH" dispatch close AAA >/dev/null 2>&1
+grep -q 'hl.dsp.window.close' "$log" || { echo "dispatch close must use lua: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+
+HINTS_HYPRCTL="$mock" "$SH" dispatch swap 0x1 >/dev/null 2>&1
+grep -q 'hl.dsp.window.swap' "$log" || { echo "dispatch swap must use lua: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+
+HINTS_HYPRCTL="$mock" "$SH" dispatch move 0x1 3 >/dev/null 2>&1
+grep -q 'hl.dsp.window.move' "$log" || { echo "dispatch move must use lua: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+grep -q 'follow = false' "$log" || { echo "dispatch move must set follow=false: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+grep -q '^arg3=' "$log" && { echo "dispatch move lua must be a single argv: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+
+HINTS_HYPRCTL="$mock" "$SH" submap reset >/dev/null 2>&1
+grep -q 'hl.dsp.submap("reset")' "$log" || { echo "submap reset must dispatch lua: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+grep -q '^arg3=' "$log" && { echo "submap reset lua must be a single argv: $(cat "$log")"; rm -f "$mock" "$log"; exit 1; }
+
+rm -f "$mock" "$log"
 echo "ok  helper-fallback"

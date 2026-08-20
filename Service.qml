@@ -475,7 +475,7 @@ Item {
     Session.setInputPath("overlay")
     Session.setSubmap(false)
     if (warnInstall) {
-      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch submap reset"
+      root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch 'hl.dsp.submap(\"reset\")'"
       Session.setBindingsWarning(root.bindingsWarning)
     }
   }
@@ -742,7 +742,7 @@ Item {
         root.installedAlphabet = Config.ALPHABET
         root.bindingsWarning = ""
       } else {
-        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch submap reset"
+        root.bindingsWarning = "Paste bindings.lua (or run hints-ctl submap install). Overlay has exclusive keys until the submap exists. Stuck: hyprctl dispatch 'hl.dsp.submap(\"reset\")'"
       }
       Session.setSubmapInstalled(root.submapInstalled)
       Session.setBindingsWarning(root.bindingsWarning)
