@@ -594,7 +594,7 @@ test("binds: plugin id, description, or hints submap hides the offer", () => {
   const byDesc = [{ modmask: 64, key: "H", dispatcher: "__lua", arg: "15", description: "Window hints" }]
   assert.strictEqual(Binds.plan(byDesc).needed, false)
   const bySubmap = [{ modmask: 0, key: "a", dispatcher: "exec", arg: "omarchy-shell window-hints key a", submap: "hints" }]
-  assert.strictEqual(Binds.plan(bySubmap).needed, false)
+  assert.strictEqual(Binds.plan(bySubmap).needed, true)
   const byDispatch = [{ modmask: 64, key: "H", dispatcher: "submap", arg: "hints" }]
   assert.strictEqual(Binds.plan(byDispatch).needed, false)
 })

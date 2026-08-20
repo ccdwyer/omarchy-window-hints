@@ -864,9 +864,7 @@ Item {
         root.helperReady = true
         root.requestSnapshot("boot")
         root.scanBinds()
-        root.checkBinds(function () {
-          root.installSubmap()
-        })
+        root.checkBinds()
         root.probeSwap()
       }
     }

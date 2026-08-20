@@ -98,9 +98,11 @@ function hintsSubmapInstalled(binds) {
         var b = list[i]
         if (!b)
             continue
-        if (String(b.submap || "") === "hints")
-            return true
+        // Members of a leftover `hints` submap are not a summon bind.
+        // Only a dispatcher that *enters* the submap counts as installed.
         if (String(b.dispatcher || "") === "submap" && String(b.arg || "") === "hints")
+            return true
+        if (String(b.dispatcher || "") === "__lua" && String(b.description || "").toLowerCase().indexOf("window hints") >= 0)
             return true
     }
     return false
