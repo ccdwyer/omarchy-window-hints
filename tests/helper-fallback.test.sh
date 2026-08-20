@@ -13,7 +13,8 @@ script=$("$SH" submap script)
 printf '%s\n' "$script" | grep -q 'define_submap("hints"' || { echo "script missing submap"; exit 1; }
 printf '%s\n' "$script" | grep -q 'submap("reset")' || { echo "script missing reset"; exit 1; }
 printf '%s\n' "$script" | grep -q 'catchall' || { echo "script missing catchall"; exit 1; }
-printf '%s\n' "$script" | grep -q 'key a' || { echo "default script missing key a"; exit 1; }
+printf '%s\n' "$script" | grep -q 'window-hints key a' || { echo "default script missing window-hints key a"; exit 1; }
+printf '%s\n' "$script" | grep -q 'shell call' && { echo "submap must not use recursive shell call: $script"; exit 1; }
 
 ignored=$("$SH" submap script qwer)
 printf '%s\n' "$ignored" | grep -q 'hl.bind("a"' || { echo "fixed alphabet missing a"; exit 1; }
@@ -22,11 +23,15 @@ printf '%s\n' "$ignored" | grep -q 'key x' || { echo "close verb x missing"; exi
 grep -q 'keyword_batch' "$SH" || { echo "POSIX helper missing keyword_batch"; exit 1; }
 grep -q -- '--batch' "$SH" || { echo "POSIX helper install missing --batch fallback"; exit 1; }
 
-if HINTS_HYPRCTL=/no/such/hyprctl "$SH" snapshot >/tmp/hints-ctl-snap.out 2>/tmp/hints-ctl-snap.err; then
+snap_out=$(mktemp)
+snap_err=$(mktemp)
+if HINTS_HYPRCTL=/no/such/hyprctl "$SH" snapshot >"$snap_out" 2>"$snap_err"; then
   echo "snapshot should fail without hyprctl"
+  rm -f "$snap_out" "$snap_err"
   exit 1
 fi
-grep -q '"ok":false' /tmp/hints-ctl-snap.out || { echo "snapshot error json missing"; exit 1; }
+grep -q '"ok":false' "$snap_out" || { echo "snapshot error json missing"; rm -f "$snap_out" "$snap_err"; exit 1; }
+rm -f "$snap_out" "$snap_err"
 
 install=$("$SH" submap install)
 printf '%s\n' "$install" | grep -q '"installed":false' || { echo "install should report installed:false without hypr: $install"; exit 1; }

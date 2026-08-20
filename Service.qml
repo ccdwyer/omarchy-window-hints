@@ -65,7 +65,6 @@ Item {
   property var clients: []
   property var monitors: []
   property var mru: []
-  property var inputState: Input.create()
   property var frozenLabels: []
   property var workQueue: []
   property var workCurrent: null
@@ -236,8 +235,9 @@ Item {
     var frozen = HintEngine.freezeInvocation(assignment, visible)
     var decorated = root.decorateLabels(frozen.labels)
     root.frozenLabels = decorated
-    root.inputState = Input.begin(root.inputState)
+    Input.begin(Session.input())
     root.hinting = true
+    Session.setHinting(true)
     Session.setOpened(true)
     Session.setLabels(decorated, frozen.overflow)
     Session.setPrefix("")
@@ -262,7 +262,8 @@ Item {
   function endHint(reason) {
     var was = root.hinting
     root.hinting = false
-    Input.reset(root.inputState)
+    Session.setHinting(false)
+    Input.reset(Session.input())
     root.resetSubmap()
     watchdogTimer.stop()
     armTimer.stop()
@@ -317,7 +318,7 @@ Item {
           root.toast("cannot swap")
         Session.setPrefix("")
         Session.setVerb("focus", 0)
-        Input.begin(root.inputState)
+        Input.begin(Session.input())
         root.publish()
         return check.reason
       }
@@ -334,7 +335,7 @@ Item {
     if (!root.hinting)
       return "idle"
     watchdogTimer.restart()
-    var result = Input.handleKey(root.inputState, raw, root.frozenLabels, Date.now(), root.armMs)
+    var result = Input.handleKey(Session.input(), raw, root.frozenLabels.length ? root.frozenLabels : Session.snapshot().labels, Date.now(), root.armMs)
     if (result.action === "dismiss") {
       root.firstRunShown = true
       Session.setFirstRun(false, root.bindCollision, root.suggestedBind, Config.alternateBinds)
@@ -354,20 +355,20 @@ Item {
       return result.verb
     }
     if (result.action === "prefix") {
-      Session.setPrefix(root.inputState.prefix)
-      Session.setVerb(root.inputState.verb, root.inputState.moveTo)
+      Session.setPrefix(Session.input().prefix)
+      Session.setVerb(Session.input().verb, Session.input().moveTo)
       root.publish()
       return "prefix"
     }
     if (result.action === "miss") {
       Session.setPrefix("")
-      Session.setVerb(root.inputState.verb, 0)
+      Session.setVerb(Session.input().verb, 0)
       root.publish()
       return "miss"
     }
     if (result.action === "arm") {
       Session.setArmed(result.target.address)
-      Session.setPrefix(root.inputState.prefix)
+      Session.setPrefix(Session.input().prefix)
       Session.setVerb("close", 0)
       armTimer.interval = root.armMs
       armTimer.restart()
@@ -706,9 +707,9 @@ Item {
     onTriggered: {
       if (!root.hinting)
         return
-      if (root.inputState.state !== "armed")
+      if (Session.input().state !== "armed")
         return
-      var target = Swap.findByAddress(root.frozenLabels, root.inputState.armedAddress)
+      var target = Swap.findByAddress(root.frozenLabels, Session.input().armedAddress)
       root.commitAction("close", target, 0)
     }
   }
@@ -742,7 +743,7 @@ Item {
   function close() { return root.endHint("close") }
 
   IpcHandler {
-    target: "io.github.chris.window-hints"
+    target: "window-hints"
 
     function key(k: string): string { return root.key(k) }
     function summon(): string { return root.summon() }

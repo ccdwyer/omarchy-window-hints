@@ -2,10 +2,14 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "js/Session.js" as Session
 import "js/Config.js" as Config
+import "js/Input.js" as Input
+import "js/Actions.js" as Actions
+import "js/Swap.js" as Swap
 
 Item {
   id: root
@@ -87,7 +91,7 @@ Item {
 
   function callService(method, arg) {
     var svc = root.serviceRef()
-    if (svc) {
+    if (svc && svc !== root) {
       if (method === "key" && typeof svc.onKey === "function")
         return svc.onKey(arg)
       if (method === "begin" && typeof svc.beginHint === "function")
@@ -99,16 +103,19 @@ Item {
         return "ok"
       }
     }
-    if (shell && typeof shell.call === "function") {
-      shell.call(root.pluginId, method, arg === undefined || arg === null ? "" : String(arg))
-      return "ok"
+    if (method === "key")
+      return root.handleKeyDirect(arg)
+    if (method === "begin") {
+      Quickshell.execDetached(["omarchy-shell", "window-hints", "begin", arg || "{}"])
+      root.opened = true
+      return "queued"
     }
-    var cmd = ["omarchy-shell", "shell", "call", root.pluginId, method]
-    if (arg !== undefined && arg !== null && String(arg).length)
-      cmd.push(String(arg))
-    ipcProc.command = cmd
-    ipcProc.running = true
-    return "queued"
+    if (method === "end") {
+      Quickshell.execDetached(["omarchy-shell", "window-hints", "end", arg || "hide"])
+      root.finishSession()
+      return "hidden"
+    }
+    return "ok"
   }
 
   function pullSession() {
@@ -137,14 +144,109 @@ Item {
       root.opened = true
   }
 
-  function key(k) { return root.callService("key", k) }
+  function key(k) { return root.handleKeyDirect(k) }
   function ping() { return "ok" }
-  function status(arg) { return root.callService("status", arg === undefined ? "{}" : arg) }
-  function begin(payload) { return root.callService("begin", payload || "{}") }
+  function status(arg) {
+    var snap = Session.snapshot()
+    return JSON.stringify({
+      ok: true,
+      hinting: snap.hinting || root.opened,
+      labels: (snap.labels || []).length,
+      overflow: snap.overflow
+    })
+  }
+  function begin(payload) {
+    root.open(payload || "{}")
+    return "ok"
+  }
   function summon() { root.open("{}"); return "ok" }
   function hide() { return root.close() }
   function dismiss() { return root.close() }
   function end(reason) { return root.close() }
+
+  function dispatchHypr(request) {
+    if (!request)
+      return
+    try {
+      Hyprland.dispatch(request)
+    } catch (e) {
+      hyprProc.command = ["hyprctl", "dispatch"].concat(String(request).split(" "))
+      hyprProc.running = true
+    }
+  }
+
+  function finishSession() {
+    Session.resetView()
+    root.opened = false
+    root.dispatchHypr(Actions.submapCmd("reset"))
+    overlayArmTimer.stop()
+  }
+
+  function handleKeyDirect(raw) {
+    root.pullSession()
+    var snap = Session.snapshot()
+    if (!snap.opened && !snap.hinting && !root.opened)
+      return "idle"
+    var result = Input.handleKey(Session.input(), raw, snap.labels, Date.now(), Config.DEFAULTS.armMs)
+    if (result.action === "dismiss") {
+      root.finishSession()
+      return "escape"
+    }
+    if (result.action === "verb") {
+      Session.setVerb(result.verb, result.moveTo || 0)
+      Session.setPrefix("")
+      root.pullSession()
+      return result.verb
+    }
+    if (result.action === "prefix") {
+      Session.setPrefix(Session.input().prefix)
+      Session.setVerb(Session.input().verb, Session.input().moveTo)
+      root.pullSession()
+      return "prefix"
+    }
+    if (result.action === "miss") {
+      Session.setPrefix("")
+      Session.setVerb(Session.input().verb, 0)
+      root.pullSession()
+      return "miss"
+    }
+    if (result.action === "arm") {
+      Session.setArmed(result.target.address)
+      Session.setPrefix(Session.input().prefix)
+      Session.setVerb("close", 0)
+      overlayArmTimer.interval = Config.DEFAULTS.armMs
+      overlayArmTimer.restart()
+      root.pullSession()
+      return "arm"
+    }
+    if (result.action === "commit")
+      return root.commitDirect(result.verb, result.target, result.moveTo)
+    return "none"
+  }
+
+  function commitDirect(verb, target, moveTo) {
+    if (!target || !target.address) {
+      Session.setToast("window vanished", Date.now() + 1200)
+      root.finishSession()
+      return "vanished"
+    }
+    if (verb === "swap") {
+      var snap = Session.snapshot()
+      if (snap.swapGreyed) {
+        Session.setToast("swap unavailable", Date.now() + 1200)
+        Session.setPrefix("")
+        Session.setVerb("focus", 0)
+        Input.begin(Session.input())
+        root.pullSession()
+        return "greyed"
+      }
+    }
+    var plan = Actions.commit(verb, target, moveTo)
+    root.finishSession()
+    if (plan && plan.dispatch)
+      root.dispatchHypr(plan.dispatch)
+    return plan ? plan.kind : "empty"
+  }
 
   function open(payloadJson) {
     root.opened = true
@@ -238,8 +340,19 @@ Item {
   }
 
   Process {
-    id: ipcProc
+    id: hyprProc
     running: false
+  }
+
+  Timer {
+    id: overlayArmTimer
+    interval: 250
+    repeat: false
+    onTriggered: {
+      var snap = Session.snapshot()
+      var target = Swap.findByAddress(snap.labels, Session.input().armedAddress)
+      root.commitDirect("close", target, 0)
+    }
   }
 
   Timer {

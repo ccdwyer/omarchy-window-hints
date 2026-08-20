@@ -50,18 +50,18 @@ lua_script() {
   while [ "$i" -le "$len" ]; do
     ch=$(printf '%s' "$ALPHABET" | cut -c "$i")
     up=$(printf '%s' "$ch" | tr 'a-z' 'A-Z')
-    printf '%s\n' "    hl.bind(\"${ch}\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key ${ch}\"))"
-    printf '%s\n' "    hl.bind(\"SHIFT + ${ch}\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key ${up}\"))"
+    printf '%s\n' "    hl.bind(\"${ch}\", hl.dsp.exec_cmd(\"omarchy-shell window-hints key ${ch}\"))"
+    printf '%s\n' "    hl.bind(\"SHIFT + ${ch}\", hl.dsp.exec_cmd(\"omarchy-shell window-hints key ${up}\"))"
     i=$((i + 1))
   done
-  printf '%s\n' "    hl.bind(\"x\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key x\"))"
+  printf '%s\n' "    hl.bind(\"x\", hl.dsp.exec_cmd(\"omarchy-shell window-hints key x\"))"
   n=1
   while [ "$n" -le 9 ]; do
-    printf '%s\n' "    hl.bind(\"${n}\", hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key ${n}\"))"
+    printf '%s\n' "    hl.bind(\"${n}\", hl.dsp.exec_cmd(\"omarchy-shell window-hints key ${n}\"))"
     n=$((n + 1))
   done
   printf '%s\n' "    hl.bind(\"escape\", function()"
-  printf '%s\n' "        hl.dispatch(hl.dsp.exec_cmd(\"omarchy-shell shell call ${PLUGIN_ID} key escape\"))"
+  printf '%s\n' "        hl.dispatch(hl.dsp.exec_cmd(\"omarchy-shell window-hints key escape\"))"
   printf '%s\n' "        hl.dispatch(hl.dsp.submap(\"reset\"))"
   printf '%s\n' "    end)"
   printf '%s\n' "    hl.bind(\"catchall\", hl.dsp.no_op())"
@@ -75,17 +75,17 @@ keyword_batch() {
   while [ "$i" -le "$len" ]; do
     ch=$(printf '%s' "$ALPHABET" | cut -c "$i")
     up=$(printf '%s' "$ch" | tr 'a-z' 'A-Z')
-    parts="$parts ; keyword bind ,${ch},exec,omarchy-shell shell call ${PLUGIN_ID} key ${ch}"
-    parts="$parts ; keyword bind SHIFT,${ch},exec,omarchy-shell shell call ${PLUGIN_ID} key ${up}"
+    parts="$parts ; keyword bind ,${ch},exec,omarchy-shell window-hints key ${ch}"
+    parts="$parts ; keyword bind SHIFT,${ch},exec,omarchy-shell window-hints key ${up}"
     i=$((i + 1))
   done
-  parts="$parts ; keyword bind ,x,exec,omarchy-shell shell call ${PLUGIN_ID} key x"
+  parts="$parts ; keyword bind ,x,exec,omarchy-shell window-hints key x"
   n=1
   while [ "$n" -le 9 ]; do
-    parts="$parts ; keyword bind ,${n},exec,omarchy-shell shell call ${PLUGIN_ID} key ${n}"
+    parts="$parts ; keyword bind ,${n},exec,omarchy-shell window-hints key ${n}"
     n=$((n + 1))
   done
-  parts="$parts ; keyword bind ,escape,exec,omarchy-shell shell call ${PLUGIN_ID} key escape"
+  parts="$parts ; keyword bind ,escape,exec,omarchy-shell window-hints key escape"
   parts="$parts ; keyword bind ,escape,submap,reset"
   parts="$parts ; keyword bind ,catchall,exec,true"
   parts="$parts ; keyword submap reset"
@@ -98,13 +98,20 @@ cmd_submap() {
     script) lua_script ;;
     install)
       script=$(lua_script | sed '/^--/d')
-      if have_hypr && "$HYPR" eval "$script" >/tmp/hints-ctl-eval.out 2>/tmp/hints-ctl-eval.err; then
+      eval_out=$(mktemp)
+      eval_err=$(mktemp)
+      kw_out=$(mktemp)
+      kw_err=$(mktemp)
+      trap 'rm -f "$eval_out" "$eval_err" "$kw_out" "$kw_err"' EXIT
+      if have_hypr && "$HYPR" eval "$script" >"$eval_out" 2>"$eval_err"; then
         ok '{"ok":true,"installed":true,"via":"eval"}'
-      elif have_hypr && "$HYPR" --batch "$(keyword_batch)" >/tmp/hints-ctl-kw.out 2>/tmp/hints-ctl-kw.err; then
+      elif have_hypr && "$HYPR" --batch "$(keyword_batch)" >"$kw_out" 2>"$kw_err"; then
         ok '{"ok":true,"installed":true,"via":"keyword"}'
       else
         ok '{"ok":true,"installed":false,"via":"bindings.lua","error":"hyprctl eval and keyword batch failed; paste bindings.lua"}'
       fi
+      rm -f "$eval_out" "$eval_err" "$kw_out" "$kw_err"
+      trap - EXIT
       ;;
     activate)
       run_hypr dispatch submap hints >/dev/null || err "submap activate failed"

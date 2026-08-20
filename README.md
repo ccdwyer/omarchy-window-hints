@@ -41,7 +41,7 @@ Suggested bind is **Super+F**. If Super+F is already taken, first summon says so
 hl.bind("SUPER + F", hl.dsp.exec_cmd("omarchy-shell shell toggle io.github.chris.window-hints '{}'"))
 ```
 
-The `hints` submap is the load-bearing input path: compositor-grabbed keys, no leak into the focused client. Summon always activates it (unless you set `inputPath: "overlay"`). If install could not write binds, a banner tells you to paste `bindings.lua`; recovery is `hyprctl dispatch submap reset`. Overlay-exclusive keyboard focus is only that opt-in enhancement — it is not a fallback.
+The `hints` submap is the load-bearing input path. Chord keys are sent to the plugin’s registered IPC target `window-hints` (`omarchy-shell window-hints key a`), not through `shell call <plugin-id>` (that would hit the overlay and must not bounce). Summon always activates the submap (unless you set `inputPath: "overlay"`). If install could not write binds, a banner tells you to paste `bindings.lua`; recovery is `hyprctl dispatch submap reset`. Overlay-exclusive keyboard focus is only that opt-in enhancement — it is not a fallback.
 
 ## IPC
 
@@ -49,7 +49,7 @@ The `hints` submap is the load-bearing input path: compositor-grabbed keys, no l
 omarchy-shell shell toggle io.github.chris.window-hints '{}'
 omarchy-shell shell summon io.github.chris.window-hints '{}'
 omarchy-shell shell hide io.github.chris.window-hints
-omarchy-shell shell call io.github.chris.window-hints key a
+omarchy-shell window-hints key a
 omarchy-shell shell call io.github.chris.window-hints status '{}'
 ```
 

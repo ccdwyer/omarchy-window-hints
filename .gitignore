@@ -5,10 +5,13 @@ bin/hints-ctl
 .impl_prompt.md
 .grok/
 .gpt_review_err.log
+.gpt_review_err*.log
 .gpt_review_r1.md
 .gpt_review*.md
 .review_prompt.md
+.review_prompt*
 .fix_prompt_r1.md
+.fix_prompt*
 .grok_fix_r1.log
 .serena/
 

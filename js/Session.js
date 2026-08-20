@@ -24,6 +24,15 @@ var submapActive = false
 var submapInstalled = false
 var bindingsWarning = ""
 var inputPath = "submap"
+var hinting = false
+var inputState = {
+    state: "idle",
+    prefix: "",
+    verb: "focus",
+    moveTo: 0,
+    armedAddress: "",
+    armedUntil: 0
+}
 
 function snapshot() {
     return {
@@ -50,7 +59,8 @@ function snapshot() {
         submapActive: submapActive,
         submapInstalled: submapInstalled,
         bindingsWarning: bindingsWarning,
-        inputPath: inputPath
+        inputPath: inputPath,
+        hinting: hinting
     }
 }
 
@@ -142,6 +152,15 @@ function setPaintedAt(ts) {
     paintedAt = ts || 0
 }
 
+function setHinting(value) {
+    hinting = !!value
+    bump()
+}
+
+function input() {
+    return inputState
+}
+
 function resetView() {
     opened = false
     labels = []
@@ -156,5 +175,12 @@ function resetView() {
     gutter = false
     error = ""
     submapActive = false
+    hinting = false
+    inputState.state = "idle"
+    inputState.prefix = ""
+    inputState.verb = "focus"
+    inputState.moveTo = 0
+    inputState.armedAddress = ""
+    inputState.armedUntil = 0
     bump()
 }
