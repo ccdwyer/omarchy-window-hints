@@ -9,7 +9,7 @@ This is an Omarchy shell plugin (service + overlay). It runs inside the long-liv
 ## Install
 
 ```sh
-omarchy plugin add <git-url> --enable
+omarchy plugin add https://github.com/ccdwyer/omarchy-window-hints.git --enable
 ```
 
 Then, on the machine, build the helper (optional — QML talks to `hyprctl` directly if the binary is missing):
