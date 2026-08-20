@@ -1,0 +1,16 @@
+[package]
+name = "hints-ctl"
+version = "1.0.0"
+edition = "2021"
+description = "Hyprland helper for Window Hints: submap install, swap probe, bind collision"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "hints-ctl"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

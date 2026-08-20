@@ -1,0 +1,38 @@
+[
+  {
+    "address": "0xspec1",
+    "mapped": true,
+    "hidden": false,
+    "at": [10, 10],
+    "size": [400, 300],
+    "workspace": { "id": -97, "name": "special:magic" },
+    "floating": true,
+    "monitor": 0,
+    "class": "scratch",
+    "title": "hidden special"
+  },
+  {
+    "address": "0xdead",
+    "mapped": true,
+    "hidden": false,
+    "at": [0, 0],
+    "size": [100, 100],
+    "workspace": { "id": 1, "name": "1" },
+    "floating": false,
+    "monitor": -1,
+    "class": "ghost",
+    "title": "unmapped monitor"
+  },
+  {
+    "address": "0xvis1",
+    "mapped": true,
+    "hidden": false,
+    "at": [40, 80],
+    "size": [800, 600],
+    "workspace": { "id": 1, "name": "1" },
+    "floating": false,
+    "monitor": 0,
+    "class": "kitty",
+    "title": "visible"
+  }
+]

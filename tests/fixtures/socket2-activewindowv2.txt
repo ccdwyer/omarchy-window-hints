@@ -1,0 +1,6 @@
+activewindowv2>>64cea2525760
+openwindow>>aaa1,1,kitty,projects/demo
+closewindow>>aaa1
+movewindowv2>>aaa2,2,2
+workspacev2>>2,2
+unknownthing>>foo,bar

@@ -1,0 +1,6 @@
+src/hints-ctl/target/
+bin/hints-ctl
+.DS_Store
+.grok_impl.log
+.impl_prompt.md
+.grok/

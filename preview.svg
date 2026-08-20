@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#1a1b1e"/>
+  <rect x="0" y="0" width="1280" height="36" fill="#111214"/>
+  <text x="16" y="24" fill="#c8c9cc" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">omarchy</text>
+  <rect x="24" y="56" width="620" height="400" rx="8" fill="#2a2c31" stroke="#3a3c42"/>
+  <rect x="656" y="56" width="600" height="400" rx="8" fill="#24262b" stroke="#3a3c42"/>
+  <rect x="24" y="472" width="400" height="220" rx="8" fill="#2e2323" stroke="#3a3c42"/>
+  <rect x="440" y="472" width="400" height="220" rx="8" fill="#23262e" stroke="#3a3c42"/>
+  <rect x="856" y="472" width="400" height="220" rx="8" fill="#232e26" stroke="#3a3c42"/>
+  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="700">
+    <rect x="40" y="72" width="36" height="28" rx="6" fill="#7aa2f7"/>
+    <text x="58" y="92" text-anchor="middle" fill="#111214">a</text>
+    <rect x="672" y="72" width="36" height="28" rx="6" fill="#7aa2f7"/>
+    <text x="690" y="92" text-anchor="middle" fill="#111214">s</text>
+    <rect x="40" y="488" width="36" height="28" rx="6" fill="#7aa2f7"/>
+    <text x="58" y="508" text-anchor="middle" fill="#111214">d</text>
+    <rect x="456" y="488" width="36" height="28" rx="6" fill="#7aa2f7"/>
+    <text x="474" y="508" text-anchor="middle" fill="#111214">f</text>
+    <rect x="872" y="488" width="36" height="28" rx="6" fill="#7aa2f7"/>
+    <text x="890" y="508" text-anchor="middle" fill="#111214">g</text>
+  </g>
+  <text x="40" y="430" fill="#8a8b90" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">firefox</text>
+  <text x="672" y="430" fill="#8a8b90" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">kitty</text>
+  <text x="40" y="676" fill="#8a8b90" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">mpv</text>
+  <text x="456" y="676" fill="#8a8b90" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">slack</text>
+  <text x="872" y="676" fill="#8a8b90" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">code</text>
+</svg>

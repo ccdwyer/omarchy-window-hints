@@ -1,0 +1,4 @@
+[
+  { "modmask": 64, "key": "F", "dispatcher": "exec", "arg": "thunar" },
+  { "modmask": 64, "key": "Q", "dispatcher": "killactive", "arg": "" }
+]

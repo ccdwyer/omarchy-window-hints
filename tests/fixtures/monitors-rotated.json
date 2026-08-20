@@ -1,0 +1,16 @@
+[
+  {
+    "id": 0,
+    "name": "DP-1",
+    "x": 0,
+    "y": 0,
+    "width": 1080,
+    "height": 1920,
+    "scale": 1.0,
+    "transform": 1,
+    "activeWorkspace": { "id": 1, "name": "1" },
+    "specialWorkspace": { "id": 0, "name": "" },
+    "reserved": [0, 0, 0, 0],
+    "focused": true
+  }
+]

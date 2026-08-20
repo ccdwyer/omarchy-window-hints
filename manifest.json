@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.chris.window-hints",
+  "name": "Window Hints",
+  "version": "1.0.0",
+  "author": "chris",
+  "license": "MIT",
+  "description": "Avy-style hint labels on every visible window: type a two-key chord to focus, swap, close, or move it.",
+  "kinds": ["overlay", "service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Overlay.qml",
+    "service": "Service.qml"
+  }
+}

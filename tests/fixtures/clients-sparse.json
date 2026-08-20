@@ -1,0 +1,9 @@
+{
+  "address": "64cea2525760",
+  "at": { "x": 12, "y": 48 },
+  "size": { "x": 800, "y": 600 },
+  "workspace": 1,
+  "monitor": 0,
+  "class": "kitty",
+  "title": "no-optional-fields"
+}
