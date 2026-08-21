@@ -333,6 +333,7 @@ Item {
             anchors.leftMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             text: lab ? (lab.title || lab.className) : ""
+            textFormat: Text.PlainText
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
