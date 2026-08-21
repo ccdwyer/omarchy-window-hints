@@ -17,3 +17,5 @@ bin/hints-ctl
 .grok_fix_r1.log
 .serena/
 
+__pycache__/
+*.pyc
